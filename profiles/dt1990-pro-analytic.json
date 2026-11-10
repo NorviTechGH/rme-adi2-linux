@@ -1,0 +1,39 @@
+{
+  "name": "DT 1990 Pro (analytic) \u2014 studio reference",
+  "output": "phones",
+  "bands": [
+    {
+      "type": "Shelf",
+      "gain_db": 6.5,
+      "freq_hz": 105,
+      "q": 0.7
+    },
+    {
+      "type": "Peak",
+      "gain_db": -2.0,
+      "freq_hz": 150,
+      "q": 0.5
+    },
+    {
+      "type": "Peak",
+      "gain_db": 4.5,
+      "freq_hz": 4200,
+      "q": 3.5
+    },
+    {
+      "type": "Peak",
+      "gain_db": -3.0,
+      "freq_hz": 7400,
+      "q": 3.4
+    },
+    {
+      "type": "Shelf",
+      "gain_db": -7.5,
+      "freq_hz": 10000,
+      "q": 0.7
+    }
+  ],
+  "eq_enable": true,
+  "bass_treble_enable": false,
+  "loudness_enable": false
+}
