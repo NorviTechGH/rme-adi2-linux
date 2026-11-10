@@ -1,5 +1,7 @@
 # ADI-2 Control for Linux
 
+<img src="data/tech.norvi.Adi2Control.png" width="96" align="right" alt="ADI-2 Control icon" />
+
 A native GTK4 remote, EQ builder, and bit-perfect PipeWire setup for the
 **RME ADI-2 DAC / Pro / 2/4 Pro** — the control surface RME only ships for
 Windows and macOS, built on RME's own published MIDI protocol.

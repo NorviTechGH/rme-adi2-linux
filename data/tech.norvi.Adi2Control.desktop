@@ -2,7 +2,8 @@
 Name=ADI-2 Control
 Comment=Remote and EQ control for the RME ADI-2 DAC/Pro
 Exec=adi2-control
-Icon=audio-card
+Icon=tech.norvi.Adi2Control
+StartupWMClass=tech.norvi.Adi2Control
 Terminal=false
 Type=Application
 Categories=Audio;AudioVideo;

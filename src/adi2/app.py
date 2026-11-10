@@ -314,13 +314,19 @@ class Adi2Window(Adw.ApplicationWindow):
         self.status_label.set_tooltip_text(text)
 
     def _build_ui(self):
+        display = Gdk.Display.get_default()
+        data_dir = Path(__file__).parents[2] / "data"
+        if display and data_dir.is_dir():
+            Gtk.IconTheme.get_for_display(display).add_search_path(str(data_dir))
+        Gtk.Window.set_default_icon_name("tech.norvi.Adi2Control")
+        self.set_icon_name("tech.norvi.Adi2Control")
         provider = Gtk.CssProvider()
         if hasattr(provider, "load_from_string"):
             provider.load_from_string(CSS)
         else:
             provider.load_from_data(CSS.encode())
         Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         # Helios layout: TWO header bars, one per column, in a Paned.
         # The sidebar column reaches the window top as one unbroken
         # surface; the content header carries its own buttons instead
