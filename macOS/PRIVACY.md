@@ -10,15 +10,22 @@ It has no account system, advertising, tracking SDKs, or network entitlement.
 ## What happens on your Mac
 
 The app reads available MIDI endpoints and exchanges control messages with the
-ADI-2 you explicitly connect. Device settings and EQ drafts are held in memory
-while the app is running. Demo mode uses simulated settings and sends no MIDI.
+ADI-2 you explicitly connect. Device settings and unsaved EQ drafts are held in
+memory while the app is running. Demo mode uses simulated settings and sends no MIDI.
+
+When you save a profile to the app's local library, its name, output selection,
+EQ bands, and related profile settings are stored as a file in Application
+Support inside the app's sandbox container. These files stay on your Mac and
+are not uploaded. Loading a library profile creates an editable draft. Saved
+library profiles remain until you remove the app's sandbox data; exported
+copies are separate.
 
 EQ import and export use the system file picker. The app reads the file you
 select or writes the profile to the location you choose. It does not scan
 folders, upload files, or retain access to those locations between sessions.
-Your exported profile remains until you delete it in Finder. Hardware settings
-remain on the ADI-2 under the device's own behavior; closing or uninstalling the
-app does not erase them.
+Your exported profile remains until you delete it in Finder. Hardware settings,
+EQ memory slots, and device setups remain on the ADI-2 under the device's own
+behavior; closing or uninstalling the app does not erase them.
 
 The app runs in Apple's App Sandbox and requests user-selected file read/write
 access. It does not request microphone, camera, contacts, Bluetooth, or network
@@ -37,7 +44,9 @@ The app does not embed a separate telemetry service.
 ## Deletion and contact
 
 No information is stored on an app-operated server, so there is no server
-account or retained server data to delete. Delete exported profiles yourself
-and remove the app if you no longer need it. For questions about this policy,
+account or retained server data to delete. To erase the local library, remove
+the app's sandbox data on your Mac. Delete exported profiles separately in
+Finder. Removing the app alone may leave its sandbox container behind. For
+questions about this policy,
 use the [project issue tracker](https://github.com/spencernorton/rme-adi2-linux/issues).
 Do not post confidential information there.

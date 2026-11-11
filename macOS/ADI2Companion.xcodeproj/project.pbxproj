@@ -13,6 +13,7 @@
 		A10000000000000000000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006; };
 		A10000000000000000000007 /* ADI2Core in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001; };
 		A10000000000000000000008 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010; };
+		A10000000000000000000009 /* PresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012; };
 /* End PBXBuildFile section */
 /* Begin PBXFileReference section */
 		A20000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADI2CompanionApp.swift; sourceTree = "<group>"; };
@@ -26,13 +27,14 @@
 		A20000000000000000000009 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ADI2Companion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000010 = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		A20000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		A20000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 /* Begin PBXFrameworksBuildPhase section */
 		A30000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000007,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {isa = PBXGroup; children = (A40000000000000000000002,A40000000000000000000003,A40000000000000000000004,); sourceTree = "<group>"; };
-		A40000000000000000000002 = {isa = PBXGroup; children = (A20000000000000000000001,A20000000000000000000002,A20000000000000000000003,A20000000000000000000004,); name = App; path = Sources/ADI2Mac; sourceTree = "<group>"; };
+		A40000000000000000000002 = {isa = PBXGroup; children = (A20000000000000000000001,A20000000000000000000002,A20000000000000000000003,A20000000000000000000004,A20000000000000000000012,); name = App; path = Sources/ADI2Mac; sourceTree = "<group>"; };
 		A40000000000000000000003 = {isa = PBXGroup; children = (A20000000000000000000005,A20000000000000000000006,A20000000000000000000007,A20000000000000000000008,A20000000000000000000010,A20000000000000000000011,); path = Resources; sourceTree = "<group>"; };
 		A40000000000000000000004 = {isa = PBXGroup; children = (A20000000000000000000009,); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
@@ -71,7 +73,7 @@
 		A30000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000005,A10000000000000000000006,A10000000000000000000008,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 /* Begin PBXSourcesBuildPhase section */
-		A30000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001,A10000000000000000000002,A10000000000000000000003,A10000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001,A10000000000000000000002,A10000000000000000000003,A10000000000000000000004,A10000000000000000000009,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 /* Begin XCBuildConfiguration section */
 		A70000000000000000000001 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; ONLY_ACTIVE_ARCH = YES; DEBUG_INFORMATION_FORMAT = dwarf; }; name = Debug; };

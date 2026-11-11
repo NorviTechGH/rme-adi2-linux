@@ -24,6 +24,8 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
     var attempts: [[UInt8]] = []
     var failNextSend = false
     var connectedDevice: MIDIDevice?
+    let libraryDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString,isDirectory:true)
+    deinit { try? FileManager.default.removeItem(at:libraryDirectory) }
     var available = [MIDIDevice(id:1,name:"ADI-2 DAC test fixture",model:.dac,destination:1,source:1)]
     func devices() -> [MIDIDevice] { available }
     func connect(_ device:MIDIDevice) throws { connectedDevice = device }
@@ -49,7 +51,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(model.canWrite)
     }
     func testInitialConnectionRequiresWholeFreshStateBeforeWrites() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         model.connect()
         XCTAssertTrue(model.syncing);XCTAssertFalse(model.connected);XCTAssertFalse(model.canWrite)
@@ -75,7 +77,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(model.canWrite)
     }
     func testWrongDeviceRepliesCannotCompleteConnection() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         model.connect();fake.deliver(try fixture(),device:0x72)
         XCTAssertFalse(model.canWrite);XCTAssertFalse(model.connected)
@@ -83,7 +85,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(model.canWrite)
     }
     func testChangingOutputDuringInitialSyncStartsIndependentState() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         model.connect()
         fake.deliver(Array(try fixture().prefix(10)))
@@ -97,7 +99,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(model.profile.output,.line)
     }
     func testConnectedOutputSwitchWaitsForPreviouslyUnseenOutput() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         try ready(fake,model)
         model.selectOutput(.line)
@@ -109,7 +111,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(model.profile.output,.line)
     }
     func testOfflineImportedDraftSurvivesConnectingAndSyncing() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         let imported=try EQImporter.parse(text:"Filter 1: ON PK Fc 100 Hz Gain 3 dB Q 1",output:.phones)
         model.profile=imported.profile
@@ -122,7 +124,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(fake.sent.count,1,"Connecting and reading must not apply an offline draft.")
     }
     func testFailedProfileWriteDisconnectsAndPreservesDraft() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         try ready(fake,model)
         model.loadReference();let draft=model.profile
@@ -135,7 +137,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(fake.attempts.count,2)
     }
     func testDisconnectedAndDemoControlsSendNoMIDI() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         let volume=try XCTUnwrap(model.parameters.first {$0.index == 12})
         model.loadReference();model.setParameter(volume,value:-30);model.applyProfile();model.sync()
@@ -151,7 +153,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(fake.attempts.count,0)
     }
     func testSampleRateDisplayCannotSendWrite() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         model.connect()
         fake.deliver(try fixture() + [ADI2Protocol.encodeDevice(index:16,raw:1)])
@@ -164,7 +166,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(model.values[ParameterAddress(address:12,index:16)],1)
     }
     func testCompleteButInvalidStateDisconnectsBeforeAllowingWrites() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         model.connect()
         fake.deliver(try fixture() + [ADI2Protocol.encode(address:8,index:6,raw:0)])
@@ -174,7 +176,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(fake.sent.count,1)
     }
     func testInvalidLiveStateWhileEditingRevokesWrites() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         try ready(fake,model)
         model.loadReference();let draft=model.profile
@@ -184,8 +186,83 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertNotNil(model.errorMessage)
         XCTAssertTrue(fake.connectedDevice == nil)
     }
+    func testPresetSaveStagesBandsThenCommitsAndRecallResyncs() async throws {
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
+        defer {model.disconnect()}
+        try ready(fake,model)
+        model.loadReference();model.selectedPresetSlot=2;model.presetName="Studio"
+        let messages=try model.profile.presetMessages(device:0x71,slot:2,name:"Studio")
+        model.saveDevicePreset()
+        XCTAssertEqual(Array(fake.sent.suffix(3)),messages)
+        XCTAssertEqual(fake.sent.count,4)
+        XCTAssertTrue(model.canWrite)
+        fake.deliver([try ADI2Protocol.encode(address:13,index:2,raw:16)])
+        XCTAssertTrue(model.canWrite,"Preset buffer flag echoes must not be treated as invalid live EQ switches.")
+        model.loadDevicePreset()
+        XCTAssertEqual(fake.sent.count,6)
+        XCTAssertEqual(fake.sent[4],try ADI2Protocol.loadEQPreset(device:0x71,output:.phones,slot:2))
+        XCTAssertEqual(fake.sent[5],ADI2Protocol.requestAll(device:0x71))
+        XCTAssertTrue(model.syncing);XCTAssertFalse(model.canWrite)
+        fake.deliver(try fixture())
+        XCTAssertTrue(model.canWrite);XCTAssertFalse(model.hasDraft)
+    }
+    func testInvalidMemorySlotsAndNamesNeverSendMIDI() async throws {
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
+        defer {model.disconnect()}
+        try ready(fake,model)
+        model.selectedPresetSlot=0;model.saveDevicePreset();model.loadDevicePreset()
+        model.selectedSetupSlot=0;model.saveDeviceSetup();model.loadDeviceSetup()
+        model.selectedPresetSlot=1;model.presetName="Not ASCII é";model.saveDevicePreset()
+        XCTAssertEqual(fake.attempts.count,1)
+        XCTAssertTrue(model.canWrite)
+        XCTAssertNotNil(model.errorMessage)
+    }
+    func testDemoMemoryRoundTripsWithoutPhysicalMIDI() async throws {
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
+        defer {model.disconnect()}
+        model.startDemo();model.selectedPresetSlot=3;model.presetName="Demo reference"
+        let reference=model.profile.bands
+        model.saveDevicePreset();model.loadFlat();model.loadDevicePreset()
+        XCTAssertEqual(model.profile.bands,reference)
+        model.selectedSetupSlot=2;model.saveDeviceSetup()
+        let volume=try XCTUnwrap(model.parameters.first {$0.index == 12})
+        model.setParameter(volume,value:-40)
+        model.loadDeviceSetup()
+        XCTAssertEqual(model.realValue(volume),volume.defaultValue)
+        XCTAssertEqual(fake.attempts.count,0)
+        XCTAssertTrue(model.demoMode);XCTAssertFalse(model.canWrite)
+    }
+    func testSetupCommandsRequireFreshReadAndFailureRevokesReadiness() async throws {
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
+        defer {model.disconnect()}
+        try ready(fake,model)
+        model.selectedSetupSlot=4;model.saveDeviceSetup()
+        XCTAssertEqual(fake.sent.last,try ADI2Protocol.setup(device:0x71,slot:4,save:true))
+        model.loadDeviceSetup()
+        XCTAssertEqual(fake.sent[2],try ADI2Protocol.setup(device:0x71,slot:4,save:false))
+        XCTAssertTrue(model.syncing);XCTAssertFalse(model.canWrite)
+        fake.deliver(try fixture())
+        XCTAssertTrue(model.canWrite)
+        fake.failNextSend=true;model.saveDevicePreset()
+        XCTAssertFalse(model.canWrite);XCTAssertFalse(model.connected)
+        XCTAssertTrue(fake.connectedDevice == nil)
+        XCTAssertNotNil(model.errorMessage)
+    }
+    func testLocalProfileLoadStaysDraftUntilExplicitApply() async throws {
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
+        defer {model.disconnect()}
+        model.loadReference();model.profile.name="Local reference";model.saveLocalProfile()
+        XCTAssertEqual(model.localProfiles.count,1)
+        model.selectOutput(.line)
+        let saved=try XCTUnwrap(model.localProfiles.first)
+        model.loadLocalProfile(saved)
+        XCTAssertEqual(model.profile.output,.line)
+        XCTAssertEqual(model.profile.bands,EQProfile.dt1990.bands)
+        XCTAssertTrue(model.hasDraft)
+        XCTAssertEqual(fake.attempts.count,0)
+    }
     func testDeviceRemovalRevokesWriteReadiness() async throws {
-        let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         try ready(fake,model)
         fake.available=[];fake.onDevicesChanged?()
         XCTAssertFalse(model.connected);XCTAssertFalse(model.canWrite)
@@ -209,8 +286,13 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         try await tests.testSampleRateDisplayCannotSendWrite()
         try await tests.testCompleteButInvalidStateDisconnectsBeforeAllowingWrites()
         try await tests.testInvalidLiveStateWhileEditingRevokesWrites()
+        try await tests.testPresetSaveStagesBandsThenCommitsAndRecallResyncs()
+        try await tests.testInvalidMemorySlotsAndNamesNeverSendMIDI()
+        try await tests.testDemoMemoryRoundTripsWithoutPhysicalMIDI()
+        try await tests.testSetupCommandsRequireFreshReadAndFailureRevokesReadiness()
+        try await tests.testLocalProfileLoadStaysDraftUntilExplicitApply()
         try await tests.testDeviceRemovalRevokesWriteReadiness()
-        print("AppModel: 11 cases, \(assertionCount) assertions, \(failureCount) failures")
+        print("AppModel: 16 cases, \(assertionCount) assertions, \(failureCount) failures")
         if failureCount > 0 {exit(1)}
     }
 }

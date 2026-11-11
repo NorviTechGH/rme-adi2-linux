@@ -63,6 +63,9 @@ public struct DeviceStateAccumulator: Sendable {
         _ = try profile()
         _ = try profile(right:true)
         for (key,raw) in values {
+            // Addresses 13/14 are preset staging buffers; their flag word at
+            // index 2 is a slot commit, not the live EQ enable boolean.
+            if key.address == 13 || key.address == 14 { continue }
             let definitions: [ParameterDefinition]
             if key.address == 12 { definitions = ParameterRegistry.device(for:device) }
             else if key.address == 0 { definitions = ParameterRegistry.input(for:device) }

@@ -1,3 +1,18 @@
+## 2026-11-10 — Profile library and device memory parity
+
+- Added sandbox-local profile Save/Load, 20 EQ preset slots and nine device
+  setups, preserving explicit draft Apply and confirming live recall/overwrite.
+- Device preset storage uses the Linux app's exact five-band staging/commit/name
+  frames; Bass/Treble and Loudness remain separate from device slot writes.
+- Validation: 30 core cases/143 assertions and 16 fake-MIDI app cases/106
+  assertions pass. Universal build and sandbox signature checks pass. Native
+  profile Save/Load and simulated preset/setup save/recall confirmations were
+  exercised. Physical hardware memory writes remain unverified.
+- Fixed a duplicate destination label and shortened the sidebar label after
+  reviewing the native screen. No Linux runtime or production deployment change.
+- Release next step: qualify the signed sandbox on physical ADI-2 hardware and
+  validate the full Xcode archive with genuine Apple signing credentials.
+
 ## 2026-11-10 — Native macOS application
 
 - Added ADI-2 Companion alongside the Linux app: SwiftUI, CoreMIDI, EQ drafting,

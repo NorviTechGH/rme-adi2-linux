@@ -20,14 +20,16 @@ This is independent software, not affiliated with or endorsed by RME.
 - Import Equalizer APO/REW filter text, CSV filter data, and compatible JSON.
   Import warnings describe adjustments to the hardware's five-band limits.
 - Export a local JSON EQ profile through the macOS file picker.
+- Save and load profiles in a local library inside the app's sandbox.
+- Recall and save the ADI-2's 20 EQ memory slots and its 9 device setups, with
+  confirmation before every hardware memory recall or save. These operations
+  follow the protocol and still require Mac hardware testing.
 - A clearly marked demo mode that sends no MIDI, including the DT 1990
   reference profile carried over from the Linux version.
 
 The macOS app does not apply the Linux PipeWire configuration, manage macOS
-audio routing, change the system sample rate, or provide the Linux app's
-on-device preset/setup slot workflow. Exported local profiles are the current
-way to save and share an EQ. No audio is captured or processed by this app;
-the ADI-2 performs its DSP.
+audio routing, or change the system sample rate. No audio is captured or
+processed by this app; the ADI-2 performs its DSP.
 
 ## Requirements and connection
 
@@ -49,6 +51,30 @@ Use an appropriate listening level before changing gain or output settings.
 Without hardware, choose **Explore demo**, or import and edit a profile offline.
 Leaving demo clears simulated settings. Demo is not a hardware validation.
 
+## Local profiles and hardware memory
+
+Open **Profiles and device memory** in the sidebar. Local profiles belong to
+this Mac app's sandboxed Application Support library (`ADI2Companion/Profiles`).
+Loading a local profile creates an EQ draft; it does not send MIDI. Use Export
+to save a copy outside the library or share it with another machine. Library
+profiles remain in the app's sandbox until its app data is removed. Exported
+copies and hardware settings are independent of that app data.
+
+Hardware memory is separate from local profiles. The ADI-2 has 20 EQ memory
+slots and 9 device setup slots. Recalling an EQ slot changes the selected
+output's active hardware EQ and replaces the editor draft; it is not an offline
+draft load. Review the selected slot and confirmation before each hardware
+memory operation. Recalling a setup may change volume, routing, and other
+device-wide settings, and replaces the editor state. Saving a device setup uses
+the hardware's current settings, excluding unapplied drafts. Saving an EQ memory
+slot stores the five filter bands only;
+the Bass/Treble and Loudness switches are not part of that memory write. Applying
+the current EQ draft to an output remains a separate action.
+
+These hardware memory features are implemented from RME's published protocol
+and covered by software tests. Real readback, persistent-slot behavior, and
+setup recall/save from this Mac build are not yet hardware-qualified.
+
 ## Build a local development app
 
 The command-line build needs Apple's Swift toolchain and macOS SDK, available
@@ -65,6 +91,10 @@ With Command Line Tools alone, run `./scripts/test-cli.sh`. It compiles the core
 and connection-state test bodies with standalone assertion runners when XCTest
 is unavailable. On a toolchain exposing XCTest, it uses `swift test` instead.
 These tests use fake MIDI and do not verify physical device communication.
+
+Initial development validation passed 46 cases with 249 assertions and built
+a sandboxed universal app for Apple silicon and Intel. Full Xcode archiving,
+Apple distribution signing, and physical ADI-2 communication remain unverified.
 
 To open the demo directly:
 
@@ -114,7 +144,7 @@ Linux hardware verification does not establish macOS hardware compatibility.
 | --- | --- |
 | `Sources/ADI2Core` | SysEx protocol, parameter registry, profiles, imports, EQ response |
 | `Sources/ADI2Mac` | SwiftUI app, local CoreMIDI transport, file pickers |
-| `Tests/ADI2CoreTests` | Protocol and data validation tests |
+| `Tests` | Protocol, import, library, and fake-MIDI connection-state tests |
 | `Resources` | App metadata, sandbox entitlements, privacy manifest, original icon |
 | `scripts` | Development bundle build, verification, icon rendering |
 

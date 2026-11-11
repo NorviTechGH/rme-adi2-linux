@@ -13,17 +13,25 @@ prepared material from evidence and account work still required.
 - Bundled `PrivacyInfo.xcprivacy` declaring no tracking or collected data.
 - In-app privacy explanation and links to setup/support and privacy policy.
 - Offline EQ editing and explicit demo mode for exploration without hardware.
+- A sandboxed local profile library, plus file-picker import/export.
+- Protocol-backed access to 20 hardware EQ slots and 9 device setups, with
+  confirmation for every recall/save; these paths remain hardware-unqualified.
 - A CLI script that produces an ad-hoc-signed sandboxed development app.
 
 The development bundle is not an `.xcarchive`, App Store signed build, installer
 package, notarized distribution, or proof of Apple review acceptance.
 
+Initial development validation passed 46 software cases with 249 assertions and
+built a sandboxed universal app for Apple silicon and Intel. This evidence does
+not establish full Xcode archiving or physical hardware compatibility.
+
 ## Release gates still open
 
 1. **Real hardware qualification:** Test the signed sandboxed Mac app with each
    advertised ADI-2 model and supported firmware. Check discovery, input/output
-   pairing, sync, EQ writes and readback, parameter edits, unplug/replug, device
-   power cycling, and coexistence with other MIDI apps. Record model, firmware,
+   pairing, sync, EQ writes and readback, parameter edits, hardware EQ slot
+   recall/save/names, setup recall/save, unplug/replug, device power cycling,
+   and coexistence with other MIDI apps. Record model, firmware,
    Mac architecture, OS version, app revision, and observed results. Until
    then, describe those models as implementation targets, not validated support.
 2. **Full Xcode validation:** Open the project, resolve its local package, build
@@ -96,10 +104,15 @@ Build and review a five-band EQ on your Mac, then apply it to compatible ADI-2
 hardware through USB MIDI.
 
 ADI-2 Companion provides a native Mac interface for output EQ, parameter
-controls, local profiles, and clear import warnings. Bring in Equalizer APO or
+controls, a local profile library, and clear import warnings. Bring in Equalizer APO or
 REW filter text, CSV, or compatible JSON; inspect the response curve and adjust
 the bands before sending your EQ to both channels of an output. Export profiles
-to keep a local copy or share your work.
+to share your work. Keep frequently used profiles in the app's local library.
+
+Hardware memory controls address 20 EQ slots and 9 device setups, with explicit
+confirmation before every recall or save. EQ slot writes store the five filter
+bands; Bass/Treble and Loudness switches are separate from that memory write.
+Advertise these hardware workflows only after qualification of the final build.
 
 Explore the interface in demo mode without connecting hardware. The app has no
 accounts, ads, or telemetry, and it does not record your audio.
@@ -122,7 +135,13 @@ For hardware testing, enable MIDI Control on the ADI-2, connect it by USB, selec
 its MIDI endpoint, and click Connect. Settings are read before hardware writes
 are enabled. EQ band changes remain drafts until **Apply EQ to Both Channels**;
 other enabled parameter controls write immediately. Sync reads the current
-hardware settings again.
+hardware settings again. Local library saves remain inside the app's sandbox;
+loading a local profile creates a draft without changing hardware. Hardware EQ
+memory and device setup operations are separate, with confirmation before every
+recall or save. Loading an EQ slot changes live EQ and replaces the editor draft.
+Loading a setup can change device-wide volume/routing and replaces the editor
+state. Setup saves use current hardware settings, excluding unapplied drafts.
+EQ memory saves contain the five bands, not Bass/Treble or Loudness switches.
 
 Before submitting these notes, add the exact tested Mac/OS/device/firmware list,
 attach the required camera video, and provide any hardware/resources Apple needs

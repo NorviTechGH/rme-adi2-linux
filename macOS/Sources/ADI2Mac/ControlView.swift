@@ -24,20 +24,24 @@ struct ControlView: View {
                 connectionBanner
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        heading
-                        if model.section == "output" {
-                            outputControls
-                            equalizer
-                            profileActions
-                            channelEQControls
-                            DisclosureGroup("All output parameters", isExpanded: $showAdvanced) {
-                                parameterList
-                                    .padding(.top, 12)
-                            }
-                            .font(.headline)
+                        if model.section == "presets" {
+                            PresetsView(model: model)
                         } else {
-                            parameterList
-                            if model.section == "input" { channelEQControls }
+                            heading
+                            if model.section == "output" {
+                                outputControls
+                                equalizer
+                                profileActions
+                                channelEQControls
+                                DisclosureGroup("All output parameters", isExpanded: $showAdvanced) {
+                                    parameterList
+                                        .padding(.top, 12)
+                                }
+                                .font(.headline)
+                            } else {
+                                parameterList
+                                if model.section == "input" { channelEQControls }
+                            }
                         }
                         Text("Independent software for RME ADI-2 hardware. Not affiliated with or endorsed by RME.")
                             .font(.caption)
@@ -96,6 +100,7 @@ struct ControlView: View {
                     }
                 }
                 Section("Profiles") {
+                    sidebarItem("Profiles and presets", icon: "square.stack.3d.up", section: "presets")
                     Button { model.section = "output"; model.loadFlat() } label: { Label("Flat response", systemImage: "line.diagonal") }
                     Button { model.section = "output"; model.loadReference() } label: { Label("DT 1990 reference", systemImage: "headphones.circle") }
                 }

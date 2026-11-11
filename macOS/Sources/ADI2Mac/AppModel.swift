@@ -26,6 +26,15 @@ typealias ParameterKey = ParameterAddress
     @Published var syncing = false
     @Published var channelNotice: String?
     private var accumulator: DeviceStateAccumulator?
+    @Published var localProfiles: [SavedProfile] = []
+    @Published var libraryWarnings: [String] = []
+    @Published var selectedPresetSlot = 1
+    @Published var presetName = ""
+    @Published var selectedSetupSlot = 1
+    private var demoPresets: [Int:EQProfile] = [:]
+    private var demoSetups: [Int:[ParameterKey:Int]] = [:]
+    private let library: FileProfileLibrary
+    var availableOutputs: [Output] { deviceModel == .dac ? [.line,.phones] : Output.allCases }
     private let midi: MIDIConnection
     private var activeDevice: MIDIDevice?
     private var generation = 0
@@ -55,11 +64,13 @@ typealias ParameterKey = ParameterAddress
         section == "device" ? ParameterRegistry.device(for: deviceModel) : section == "input" ? ParameterRegistry.input(for: deviceModel) : ParameterRegistry.output(for: deviceModel, output: selectedOutput)
     }
 
-    init(midi: MIDIConnection? = nil) {
+    init(midi: MIDIConnection? = nil, library: FileProfileLibrary? = nil) {
+        self.library = library ?? FileProfileLibrary(directory:(try? FileProfileLibrary.defaultDirectory()) ?? FileManager.default.temporaryDirectory.appendingPathComponent("ADI2Companion-Profiles"))
         self.midi = midi ?? CoreMIDILink()
         self.midi.onDevicesChanged = { [weak self] in self?.refreshDevices() }
         self.midi.onMessage = { [weak self] bytes in self?.receive(bytes) }
         refreshDevices()
+        refreshProfiles()
     }
     func refreshDevices() {
         endpoints = midi.devices()
@@ -93,6 +104,7 @@ typealias ParameterKey = ParameterAddress
     }
     func startDemo() {
         disconnect(); demoMode = true
+        demoPresets = [1:.dt1990]; demoSetups = [:]
         values = [:]; hasDraft = false; drafts = [:]
         for output in Output.allCases {
             for p in ParameterRegistry.output(for: deviceModel, output: output) {
@@ -169,6 +181,91 @@ typealias ParameterKey = ParameterAddress
         else { hasDraft = false; profile = .flat; profile.output = output; if demoMode { readProfile() } }
         importWarnings = []
         if activeDevice != nil && !demoMode { requestSync() }
+    }
+    func selectPresetOutput(_ output: Output) { selectOutput(output); section = "presets" }
+    func refreshProfiles() {
+        do { let listing = try library.list(); localProfiles = listing.profiles; libraryWarnings = listing.warnings }
+        catch { libraryWarnings = [error.localizedDescription] }
+    }
+    func saveLocalProfile() {
+        do {
+            var saved = profile
+            if saved.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty { saved.name = "Untitled EQ" }
+            _ = try library.save(saved); refreshProfiles()
+            status = "Saved \(saved.name) in your Mac profile library."
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func loadLocalProfile(_ item: SavedProfile) {
+        do {
+            try item.profile.validate()
+            profile = item.profile; profile.output = selectedOutput
+            hasDraft = true; importWarnings = []; section = "output"
+            status = "Loaded \(profile.name) as a draft for \(selectedOutput.title)."
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func saveDevicePreset() {
+        var attempted = false
+        do {
+            guard canWrite || demoMode else { throw ADI2Error.invalid("Connect and sync the ADI-2 before writing a device slot.") }
+            let messages = try profile.presetMessages(device:deviceModel.deviceID,slot:selectedPresetSlot,name:presetName)
+            if demoMode {
+                var saved = profile
+                saved.name = presetName.isEmpty ? "Preset \(selectedPresetSlot)" : presetName
+                demoPresets[selectedPresetSlot] = saved
+                status = "Saved demo EQ slot \(selectedPresetSlot). No MIDI was sent."
+                return
+            }
+            for message in messages { attempted = true; try midi.send(message) }
+            status = "EQ slot \(selectedPresetSlot) write sent. Recall it to verify the device memory."
+        } catch {
+            errorMessage = attempted ? "The EQ slot write may be incomplete. \(error.localizedDescription)" : error.localizedDescription
+            if attempted { disconnect() }
+        }
+    }
+    func loadDevicePreset() {
+        var attempted = false
+        do {
+            guard canWrite || demoMode else { throw ADI2Error.invalid("Connect and sync the ADI-2 before recalling a device slot.") }
+            let message = try ADI2Protocol.loadEQPreset(device:deviceModel.deviceID,output:selectedOutput,slot:selectedPresetSlot)
+            if demoMode {
+                var loaded = demoPresets[selectedPresetSlot] ?? .flat
+                loaded.output = selectedOutput
+                // Device EQ slots replace bands; the live switches remain independent.
+                profile.bands = loaded.bands; profile.name = loaded.name
+                for p in try ADI2Protocol.parseParameters(profile.containers().flatMap { $0 }) { values[ParameterKey(address:p.address,index:p.index)] = p.raw }
+                hasDraft = false; drafts[selectedOutput] = nil
+                status = "Loaded demo EQ slot \(selectedPresetSlot). No MIDI was sent."
+                return
+            }
+            attempted = true; try midi.send(message)
+            hasDraft = false; drafts[selectedOutput] = nil; importWarnings = []
+            requestSync()
+        } catch { errorMessage = error.localizedDescription; if attempted { disconnect() } }
+    }
+    func saveDeviceSetup() {
+        var attempted = false
+        do {
+            guard canWrite || demoMode else { throw ADI2Error.invalid("Connect and sync the ADI-2 before saving a setup.") }
+            let message = try ADI2Protocol.setup(device:deviceModel.deviceID,slot:selectedSetupSlot,save:true)
+            if demoMode { demoSetups[selectedSetupSlot] = values; status = "Saved demo setup \(selectedSetupSlot). No MIDI was sent."; return }
+            attempted = true; try midi.send(message)
+            status = "Save setup \(selectedSetupSlot) command sent. Verify the slot on the device."
+        } catch { errorMessage = error.localizedDescription; if attempted { disconnect() } }
+    }
+    func loadDeviceSetup() {
+        var attempted = false
+        do {
+            guard canWrite || demoMode else { throw ADI2Error.invalid("Connect and sync the ADI-2 before recalling a setup.") }
+            let message = try ADI2Protocol.setup(device:deviceModel.deviceID,slot:selectedSetupSlot,save:false)
+            if demoMode {
+                guard let saved = demoSetups[selectedSetupSlot] else { throw ADI2Error.invalid("Save this demo setup before recalling it. Demo memory starts empty.") }
+                values = saved; hasDraft = false; drafts = [:]; readProfile(); updateChannelNotice()
+                status = "Loaded demo setup \(selectedSetupSlot). No MIDI was sent."; return
+            }
+            attempted = true; try midi.send(message)
+            hasDraft = false; drafts = [:]; importWarnings = []
+            requestSync()
+        } catch { errorMessage = error.localizedDescription; if attempted { disconnect() } }
     }
     func updateBand(index: Int, band: Band) {
         guard profile.bands.indices.contains(index) else { return }
