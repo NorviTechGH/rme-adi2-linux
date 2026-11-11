@@ -1,32 +1,47 @@
 name: macOS
 on:
   push:
-    branches: [main]
+    branches: [main, macos-app]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   native:
     runs-on: macos-15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Test Swift protocol and profile compatibility
         working-directory: macOS
         run: swift test
       - name: Build sandboxed development app
-        run: macOS/scripts/build-app.sh
-      - name: Archive without distribution signing
-        run: xcodebuild -project macOS/ADI2Companion.xcodeproj -scheme ADI2Companion -configuration Release -archivePath "$RUNNER_TEMP/ADI2Companion.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+        run: macOS/scripts/build-app.sh --universal
+      - name: Archive and verify unsigned universal Xcode app
+        run: python3 macOS/scripts/build-xcode-artifact.py --output "$RUNNER_TEMP/ADI2Companion-Xcode-artifacts"
+      - name: Retain unsigned Xcode app and archive for local signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: ADI2Companion-Xcode-unsigned-universal-${{ github.sha }}
+          path: ${{ runner.temp }}/ADI2Companion-Xcode-artifacts/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
       - name: Package development app
         run: ditto -c -k --sequesterRsrc --keepParent "macOS/build/ADI-2 Companion.app" "macOS/build/ADI2Companion-development.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: ADI2Companion-development
           path: macOS/build/ADI2Companion-development.zip
+          if-no-files-found: error
   linux-regression:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

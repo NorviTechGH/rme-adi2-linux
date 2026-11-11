@@ -26,6 +26,10 @@ package, notarized distribution, or proof of Apple review acceptance.
 - **Software:** 50 cases and 323 assertions pass (core: 33/205; app model:
   17/118). A sandboxed universal development app builds for Apple silicon and
   Intel.
+- **Volume presentation:** 10 isolated cases / 48 assertions pass, including
+  real Core Animation presentation frames, rapid retargets, 0.1 dB input and
+  authoritative dragging during motion. The user confirmed smooth physical-knob
+  feedback with the development app.
 - **Physical ADI-2 DAC, Apple silicon, macOS 27.2:** The native sandboxed app
   discovers the device and reads its complete 219-parameter settings state.
   A GUI Phones volume reduction of 0.1 dB and restoration passed, with fresh
@@ -72,6 +76,33 @@ other device models. Store submission still depends on the release gates below.
 Track these gates durably in the project tracker; update this file with actual
 test results rather than turning planned checks into claimed validation.
 
+## Current submission preparation — November 11, 2026
+
+The app record and bundle identifier have been created in the intended Apple
+Developer account. The English (US) version draft is 1.0.0, with a saved
+USD 15.00 upfront base price. It has not been submitted for review. The account
+holder accepted the updated Developer Program License Agreement; paid-app
+agreement/compliance, distribution signing and review assets remain in progress.
+Public listing text, synthetic screenshot fixtures and the capture instructions
+are in [AppStore/](AppStore/README.md). The support page is [SUPPORT.md](SUPPORT.md).
+
+Full Xcode is unavailable on the development Mac, so CI retains a universal
+unsigned Xcode-built app and archive through
+`scripts/build-xcode-artifact.py`. Its receipt binds source SHA, SDK and matching
+debug-symbol UUIDs. Apple signing keys stay local; CI receives no Apple
+credentials. Validate this route on CI before treating its artifacts as usable.
+The output remains explicitly unsigned and is not an App Store upload package.
+
+Apple supports manual Mac distribution signing and a single-app `productbuild`
+package, which can be verified and delivered with standalone Transporter. See
+[Apple signing](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac),
+[packaging](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)
+and [Transporter](https://support.apple.com/guide/transporter-app/welcome/mac).
+This CI/local split still requires an actual signed-package validation and
+physical final-build test. TestFlight requires an appropriate profile even
+though unrestricted Mac App Store entitlements alone need none; see
+[TN3125](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles).
+
 ## Build and archive
 
 With full Xcode selected, run core XCTest tests using `swift test` from this
@@ -108,7 +139,7 @@ These are draft strings, not an existing or reserved App Store listing.
 | Version | 1.0.0 |
 | Build | 1 |
 | Keywords | equalizer,parametric,EQ,MIDI,DAC,headphones,audio |
-| Support URL | https://github.com/spencernorton/rme-adi2-linux/issues |
+| Support URL | https://github.com/spencernorton/rme-adi2-linux/blob/main/macOS/SUPPORT.md |
 | Privacy URL | https://github.com/spencernorton/rme-adi2-linux/blob/main/macOS/PRIVACY.md |
 | Marketing URL | https://github.com/spencernorton/rme-adi2-linux/blob/main/macOS/README.md |
 

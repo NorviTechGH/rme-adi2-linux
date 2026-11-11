@@ -1,3 +1,22 @@
+## 2026-11-11 — Prepare the paid Mac App Store release
+
+- Created the intended app record and explicit bundle identifier after the user
+  completed Apple's updated Developer Program License Agreement. Saved the
+  English (US) version draft and the requested USD 15.00 upfront base price.
+  The paid agreement/compliance, signed upload and App Review remain pending.
+- Added listing/review drafts, genuine screenshot capture preparation, synthetic
+  fixtures and a public maintainer support page. Canonical URLs still need the
+  source PR to land before they can be used in the submitted listing.
+- Added a CI path retaining the actual unsigned universal Xcode archive/app,
+  sandbox entitlements and a source/SDK/symbol-bound checksum receipt. Apple
+  signing keys remain local. Static checks and 14 artifact verifier cases pass;
+  the real Xcode integration run remains next.
+- A fresh bounded read-only DAC snapshot is complete. The user reserved unused
+  memory slots for qualification; EQ 20 and setup 9 are selected. No memory
+  write is claimed here, and the accepted fader behavior is unchanged.
+- Next: run native CI, qualify memory on the physical DAC, validate/sign the
+  release package, finish Apple account fields and attach actual review assets.
+
 ## 2026-11-11 — Animate the main fader for physical-knob feedback
 
 - Replaced the main fader renderer with a native AppKit control whose track,
