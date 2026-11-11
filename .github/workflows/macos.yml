@@ -8,7 +8,8 @@ permissions:
   contents: read
 jobs:
   native:
-    runs-on: macos-15
+    # The standard Intel pool avoids arm64 capacity failures; builds remain universal.
+    runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4

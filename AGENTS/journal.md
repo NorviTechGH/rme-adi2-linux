@@ -1,3 +1,16 @@
+## 2026-11-11 — Route native CI around hosted runner capacity
+
+- Fork workflow run 43032041326 at `a8b8210` passed Linux regression, but GitHub
+  cancelled the native job before any step ran: no hosted runner was acquired,
+  with an explicit macOS arm64 capacity notice. This was not a compiler or test
+  failure, and it produced no new native/archive validation evidence.
+- Selected the standard `macos-15-intel` hosted runner documented by
+  [GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+  Generic Mac archive destination and both `arm64` / `x86_64` builds remain
+  required. No larger runner, signing credentials or runtime permissions added.
+- Validation: workflow YAML parses and the diff is clean. Next: rerun CI on the
+  new head and retain the verified Xcode archive before local distribution signing.
+
 ## 2026-11-11 — Resolve native CI compiler compatibility
 
 - The first full-Xcode runner found ambiguous channel-index type inference and
