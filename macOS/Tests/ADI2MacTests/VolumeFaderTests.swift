@@ -14,6 +14,7 @@ class VolumeFaderTestCase {}
     static var assertions = 0
     static var failures: [String] = []
     static var motionSamples: [Double] = []
+    static var motionTimelineSamples: [[String:Double]] = []
     static var retargetSamples: [Double] = []
     static var burstSamples: [Double] = []
     static var midAnimationDrag: [String:Double] = [:]
@@ -24,9 +25,42 @@ class VolumeFaderTestCase {}
         XCTAssertTrue(condition, message, file:file, line:line)
         #endif
     }
-    static func reset() { assertions = 0; failures = []; motionSamples = []; retargetSamples = []; burstSamples = []; midAnimationDrag = [:] }
+    static func reset() { assertions = 0; failures = []; motionSamples = []; motionTimelineSamples = []; retargetSamples = []; burstSamples = []; midAnimationDrag = [:] }
     static var report: [String: Any] {
-        ["cases":10,"assertions":assertions,"failures":failures,"motion_presentation_x":motionSamples,"retarget_presentation_x":retargetSamples,"burst_presentation_x":burstSamples,"mid_animation_drag":midAnimationDrag]
+        ["cases":10,"assertions":assertions,"failures":failures,"motion_presentation_x":motionSamples,"motion_timeline_samples":motionTimelineSamples,"retarget_presentation_x":retargetSamples,"burst_presentation_x":burstSamples,"mid_animation_drag":midAnimationDrag]
+    }
+}
+
+/// Drives real presentation layers at known CA local times. This checks
+/// interpolation semantics independently of a hosted test task's scheduling;
+/// it does not claim a real-time display frame rate.
+@MainActor private final class FaderPresentationClock {
+    private let layer:CALayer
+    private let window:NSWindow
+    private let started=CACurrentMediaTime()
+    private(set) var elapsed:Double=0
+    var wallElapsed:Double {CACurrentMediaTime()-started}
+    init(layer:CALayer,window:NSWindow) {
+        self.layer=layer;self.window=window
+        let pausedTime=layer.convertTime(CACurrentMediaTime(),from:nil)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.speed=0
+        layer.timeOffset=pausedTime
+        CATransaction.commit()
+    }
+    func commit() async {
+        window.displayIfNeeded()
+        CATransaction.flush()
+        try? await Task.sleep(nanoseconds:30_000_000)
+    }
+    func advance(by interval:Double) async {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.timeOffset += interval
+        elapsed += interval
+        CATransaction.commit()
+        await commit()
     }
 }
 
@@ -119,28 +153,43 @@ class VolumeFaderTestCase {}
     func testRealPresentationPassesThroughIntermediatePositionsWithoutOvershoot() async throws {
         let (window,fader) = scene()
         defer { window.orderOut(nil); window.close() }
+        guard let layer=fader.layer else {FaderEvidence.check(false,"Presentation sampling needs a layer timing root.");return}
+        let clock=FaderPresentationClock(layer:layer,window:window)
         var callbacks:[Double] = []
         fader.onChange = {callbacks.append($0)}
         fader.setVolume(fader.minValue,animated:false)
+        await clock.commit()
         await pause(0.08)
         guard let startLayer = fader.knobLayer.presentation() else {
-            FaderEvidence.check(false,"A composited presentation layer is required; offscreen endpoint-only results cannot prove smoothness.")
+            FaderEvidence.check(false,"A composited presentation layer is required; offscreen endpoint-only results cannot prove interpolation.")
             return
         }
         let start = Double(startLayer.position.x)
         fader.setVolume(fader.maxValue,animated:true)
         let end = Double(fader.knobLayer.position.x)
+        await clock.commit()
         var samples:[Double] = []
+        var timeline:[[String:Double]] = []
         for _ in 0..<17 {
-            await pause(1.0/60.0)
-            if let presented = fader.knobLayer.presentation() { samples.append(Double(presented.position.x)) }
+            await clock.advance(by:1.0/60.0)
+            if let presented = fader.knobLayer.presentation() {
+                let x=Double(presented.position.x)
+                samples.append(x)
+                timeline.append(["animation_seconds":clock.elapsed,"wall_seconds":clock.wallElapsed,"position_x":x])
+            }
         }
         FaderEvidence.motionSamples = samples
+        FaderEvidence.motionTimelineSamples = timeline
+        // Bounded, synthetic diagnostics survive XCTest logs as well as the
+        // standalone JSON report. Wall elapsed time is measured, not assumed.
+        if let data=try? JSONSerialization.data(withJSONObject:timeline,options:.sortedKeys),let text=String(data:data,encoding:.utf8) {
+            print("Fader CA-timeline presentation samples (not an FPS measurement): \(text)")
+        }
         let low=min(start,end),high=max(start,end)
         let intermediate = Set(samples.filter {$0 > low+0.5 && $0 < high-0.5}.map {Int(($0*10).rounded())})
-        FaderEvidence.check(window.isVisible,"Motion is sampled from a visible isolated test window.")
-        FaderEvidence.check(samples.count >= 12,"Presentation geometry is available across successive display frames.")
-        FaderEvidence.check(intermediate.count >= 4,"At least four distinct intermediate knob positions prove visible motion between endpoints.")
+        FaderEvidence.check(window.isVisible,"Interpolation is sampled from a visible isolated test window.")
+        FaderEvidence.check(samples.count >= 12,"Presentation geometry is available across successive CA timeline ticks.")
+        FaderEvidence.check(intermediate.count >= 4,"At least four distinct intermediate knob positions prove CA-timeline interpolation between endpoints.")
         FaderEvidence.check(samples.allSatisfy {$0 >= low-0.5 && $0 <= high+0.5},"The visible knob never overshoots the valid track.")
         near(samples.last ?? .nan,end,"The presentation settles at the authoritative target.",tolerance:0.75)
         FaderEvidence.check(callbacks.isEmpty,"Every sampled intermediate position remains presentation-only.")
@@ -173,29 +222,11 @@ class VolumeFaderTestCase {}
     func testBurstyReportedKnobTargetsRemainContinuousAndNeverEmitInput() async throws {
         let (window,fader)=scene()
         defer {window.orderOut(nil);window.close()}
-        guard let clock=fader.layer else {FaderEvidence.check(false,"Bursty target checks need a layer timing root.");return}
-        // Hosted XCTest scheduling can resume a 16 ms sleep after an entire
-        // animation has finished. Control only this test window's CA timeline:
-        // presentation geometry remains real, but scheduler stalls cannot turn
-        // an intended mid-flight retarget into an endpoint-only observation.
-        let pausedTime=clock.convertTime(CACurrentMediaTime(),from:nil)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        clock.speed=0
-        clock.timeOffset=pausedTime
-        CATransaction.commit()
+        guard let layer=fader.layer else {FaderEvidence.check(false,"Bursty target checks need a layer timing root.");return}
+        let clock=FaderPresentationClock(layer:layer,window:window)
         fader.setVolume(-75,animated:false)
-        CATransaction.flush()
+        await clock.commit()
         await pause(0.08)
-        @MainActor func advanceClock(by interval:Double) async {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            clock.timeOffset += interval
-            CATransaction.commit()
-            window.displayIfNeeded()
-            CATransaction.flush()
-            await pause(0.03)
-        }
         var callbacks:[Double]=[]
         fader.onChange={callbacks.append($0)}
         let targets:[Double]=[-74.5,-71.5,-71,-68,-67.5,-64.5,-64,-61]
@@ -210,17 +241,16 @@ class VolumeFaderTestCase {}
             fader.setVolume(target,animated:true)
             let nextModel=Double(fader.knobLayer.position.x)
             // Install at the current paused time before advancing one CA frame.
-            CATransaction.flush()
-            await pause(0.03)
-            await advanceClock(by:displayFrame)
+            await clock.commit()
+            await clock.advance(by:displayFrame)
             guard let afterLayer=fader.knobLayer.presentation() else {FaderEvidence.check(false,"Presentation must remain available while reported targets change.");return}
             let after=Double(afterLayer.position.x)
             continuous = continuous && abs(after-before) <= max(2.5,abs(nextModel-before)*0.55)
             monotonic = monotonic && after >= before-0.75 && after <= nextModel+0.75
             samples.append(contentsOf:[before,after])
-            await advanceClock(by:intervals[index]-displayFrame)
+            await clock.advance(by:intervals[index]-displayFrame)
         }
-        await advanceClock(by:0.24)
+        await clock.advance(by:0.24)
         if let final=fader.knobLayer.presentation() {samples.append(Double(final.position.x))}
         FaderEvidence.burstSamples=samples
         FaderEvidence.check(meaningfulRetargets >= 2,"Several reported knob changes retarget between endpoints; observed \(meaningfulRetargets).")
