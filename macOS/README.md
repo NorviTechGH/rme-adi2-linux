@@ -158,12 +158,19 @@ The motion harness needs a logged-in graphical Mac session. With Command Line
 Tools installed, run these commands from `macOS` in a GUI terminal:
 
 ```sh
-mkdir -p .build/fader-check
-DEVELOPER_DIR=/Library/Developer/CommandLineTools xcrun swiftc -parse-as-library \
+mkdir -p .build/fader-check-realtime
+DEVELOPER_DIR=/Library/Developer/CommandLineTools xcrun swiftc -parse-as-library -D REALTIME \
   Sources/ADI2Mac/VolumeFader.swift Tests/ADI2MacTests/VolumeFaderTests.swift \
-  -o .build/fader-check/VolumeFaderCheck
-.build/fader-check/VolumeFaderCheck --report "$PWD/.build/fader-check/results.json"
+  -o .build/fader-check-realtime/VolumeFaderCheck
+.build/fader-check-realtime/VolumeFaderCheck --report "$PWD/.build/fader-check-realtime/results.json"
 ```
+
+`-D REALTIME` selects the visible wall-clock acceptance probe. Omit that flag
+and choose a separate output/report path to run the controlled Core Animation
+clock used by CI. Both modes run the same 10 cases and 48 assertions; only the
+test clock changes. Controlled mode samples actual presentation geometry at
+known CA times and does not claim a real-time frame rate. Reports identify the
+mode and include bounded CA/wall timestamps and positions for motion checks.
 
 Click **Run self-check**. The window reports cases, assertions, failures, and
 sampled positions; the JSON report is written after the checks finish. This app

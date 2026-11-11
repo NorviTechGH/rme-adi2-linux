@@ -1,3 +1,28 @@
+## 2026-11-11 — Separate fader CI timing from real-time acceptance
+
+- Hosted run 43051754638 at the documentation-only `f8a2a35` head passed all
+  50 core/model cases and nine fader cases, but failed the first post-retarget
+  wall-clock sample's proximity assertion. That case took 2.233 seconds despite
+  approximately 0.423 seconds of requested sleeps. The log lacked retarget
+  geometry, so it did not establish a production renderer jump; it exposed the
+  remaining test's dependence on hosted scheduling.
+- Routed all six scene-based timing checks through one test clock. CI steps
+  actual presentation layers on a controlled Core Animation timeline;
+  `-D REALTIME` changes only that helper to wall-clock progression for visible
+  local acceptance. Both modes run identical case bodies, all 10 cases and
+  48 assertions, with unchanged numerical thresholds and no skips. Bounded
+  diagnostics identify the mode and record CA/wall timestamps and geometry.
+- Both fresh isolated preview apps were visibly launched and checked locally:
+  controlled mode and REALTIME each passed 10 cases / 48 assertions with zero
+  failures. Their JSON reports confirm the modes and actual intermediate
+  presentation samples, retarget continuity and authoritative drag baseline.
+  Controlled CI samples establish interpolation semantics, not a real-time FPS
+  guarantee; the separate REALTIME replay supplies the wall-clock probe.
+- Updated the documented harness command for explicit REALTIME mode. Production
+  sources/resources remain identical to the distribution-signed `ec848fc`
+  baseline; app animation duration, MIDI behavior and packaging are unchanged.
+  No hardware action was performed by these component checks.
+
 ## 2026-11-11 — Verify the Xcode release archive and capture provenance
 
 - Native and Linux CI passed at
