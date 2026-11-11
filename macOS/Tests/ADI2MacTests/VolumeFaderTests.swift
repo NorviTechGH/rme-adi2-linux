@@ -173,12 +173,34 @@ class VolumeFaderTestCase {}
     func testBurstyReportedKnobTargetsRemainContinuousAndNeverEmitInput() async throws {
         let (window,fader)=scene()
         defer {window.orderOut(nil);window.close()}
+        guard let clock=fader.layer else {FaderEvidence.check(false,"Bursty target checks need a layer timing root.");return}
+        // Hosted XCTest scheduling can resume a 16 ms sleep after an entire
+        // animation has finished. Control only this test window's CA timeline:
+        // presentation geometry remains real, but scheduler stalls cannot turn
+        // an intended mid-flight retarget into an endpoint-only observation.
+        let pausedTime=clock.convertTime(CACurrentMediaTime(),from:nil)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        clock.speed=0
+        clock.timeOffset=pausedTime
+        CATransaction.commit()
         fader.setVolume(-75,animated:false)
+        CATransaction.flush()
         await pause(0.08)
+        @MainActor func advanceClock(by interval:Double) async {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            clock.timeOffset += interval
+            CATransaction.commit()
+            window.displayIfNeeded()
+            CATransaction.flush()
+            await pause(0.03)
+        }
         var callbacks:[Double]=[]
         fader.onChange={callbacks.append($0)}
         let targets:[Double]=[-74.5,-71.5,-71,-68,-67.5,-64.5,-64,-61]
         let intervals:[Double]=[0.03,0.05,0.04,0.08,0.03,0.06,0.04,0.08]
+        let displayFrame=1.0/60.0
         var samples:[Double]=[]
         var continuous=true,monotonic=true,meaningfulRetargets=0
         for (index,target) in targets.enumerated() {
@@ -187,20 +209,21 @@ class VolumeFaderTestCase {}
             if abs(previousModel-before) > 3 {meaningfulRetargets += 1}
             fader.setVolume(target,animated:true)
             let nextModel=Double(fader.knobLayer.position.x)
-            await pause(1.0/60.0)
+            // Install at the current paused time before advancing one CA frame.
+            CATransaction.flush()
+            await pause(0.03)
+            await advanceClock(by:displayFrame)
             guard let afterLayer=fader.knobLayer.presentation() else {FaderEvidence.check(false,"Presentation must remain available while reported targets change.");return}
             let after=Double(afterLayer.position.x)
-            // At the first display frame, easing can advance partway toward a
-            // new target; it must not snap to an old model-layer endpoint.
             continuous = continuous && abs(after-before) <= max(2.5,abs(nextModel-before)*0.55)
             monotonic = monotonic && after >= before-0.75 && after <= nextModel+0.75
             samples.append(contentsOf:[before,after])
-            await pause(max(0,intervals[index]-1.0/60.0))
+            await advanceClock(by:intervals[index]-displayFrame)
         }
-        await pause(0.24)
+        await advanceClock(by:0.24)
         if let final=fader.knobLayer.presentation() {samples.append(Double(final.position.x))}
         FaderEvidence.burstSamples=samples
-        FaderEvidence.check(meaningfulRetargets >= 2,"Several reported knob changes retarget while the visible fader is still between endpoints.")
+        FaderEvidence.check(meaningfulRetargets >= 2,"Several reported knob changes retarget between endpoints; observed \(meaningfulRetargets).")
         FaderEvidence.check(continuous,"Rapid 0.5/3 dB reported changes continue from visible positions without endpoint snaps.")
         FaderEvidence.check(monotonic,"A rising burst never visibly reverses or overshoots its targets.")
         FaderEvidence.check(Set(samples.map {Int(($0*10).rounded())}).count >= 8,"Continuous retargeting still produces distinct intermediate positions.")
