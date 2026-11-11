@@ -1,3 +1,42 @@
+## 2026-11-11 — Verify the Xcode release archive and capture provenance
+
+- Native and Linux CI passed at
+  `ec848fcdf4f1aea7a2b38758441141eb53e01257`
+  ([run 43042638214](https://github.com/NorviTechGH/rme-adi2-linux/actions/runs/43042638214)).
+  Downloaded and independently verified the actual unsigned universal Xcode
+  app/archive: GitHub artifact digest, all payload checksums, source receipt,
+  identical app/archive files, matching dSYM UUIDs, privacy/license resources,
+  icon renditions and supplied sandbox entitlements. Xcode 16.4 (16F6) produced
+  SDK 15.5 (24F74) / minimum macOS 14.0 in both arm64 and x86_64 slices.
+- Core/model checks pass 50 cases / 323 assertions. The isolated fader suite
+  passes 10 cases / 48 assertions in native CI and a visible local replay.
+  Interpolation and burst cases sample actual presentation layers on a controlled
+  Core Animation clock; they establish intermediate geometry and callback
+  separation, not a real-time frame-rate guarantee. Independent real-time
+  retarget and authoritative mid-animation drag checks remain. Production
+  animation behavior is unchanged.
+- Captured and attached two genuine 2880×1800 screenshots to the version draft
+  using an isolated demo copy of the verified revision. The only source
+  difference is the default window size (1120×800 to 1440×900), with an
+  independent capture bundle/sandbox.
+  Capture provenance does not qualify hardware or the final signed binary.
+- Signed a fresh archive copy with genuine Mac App Store application/installer
+  identities and produced an upload package. Verified both architectures,
+  exact sandbox entitlements, certificate identities, preserved executable
+  payload after narrowly audited signing metadata changes, and identical
+  expanded package contents without installer scripts. Keys remain outside CI.
+  Transporter acceptance, final runtime qualification and App Review remain
+  open. The version draft retains the selected USD 15.00 upfront base price.
+- No persistent EQ/setup memory write has been performed. Read-only preset
+  replies use a different flags index from the documented staging/commit
+  control; incoming reports alone do not establish a different write address.
+  Qualify the documented write sequence in a reserved unused slot with fresh
+  readback and volume protection. EQ Apply, memory, reconnect, Pro/2/4 and Intel
+  runtime qualification remain open for the final signed build.
+- Updated `macOS/APP_STORE.md` to distinguish completed archive/capture/signing
+  work from final hardware/video qualification, public URL/metadata,
+  Transporter processing and review gates. No production source or tests changed.
+
 ## 2026-11-11 — Route native CI around hosted runner capacity
 
 - Fork workflow run 43032041326 at `a8b8210` passed Linux regression, but GitHub
