@@ -1,0 +1,34 @@
+name: macOS
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Swift protocol and profile compatibility
+        working-directory: macOS
+        run: swift test
+      - name: Build sandboxed development app
+        run: macOS/scripts/build-app.sh
+      - name: Archive without distribution signing
+        run: xcodebuild -project macOS/ADI2Companion.xcodeproj -scheme ADI2Companion -configuration Release -archivePath "$RUNNER_TEMP/ADI2Companion.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+      - name: Package development app
+        run: ditto -c -k --sequesterRsrc --keepParent "macOS/build/ADI-2 Companion.app" "macOS/build/ADI2Companion-development.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ADI2Companion-development
+          path: macOS/build/ADI2Companion-development.zip
+  linux-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest
+      - run: python -m pytest tests -q
