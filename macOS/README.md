@@ -9,7 +9,8 @@ This is independent software, not affiliated with or endorsed by RME.
 
 ## Current scope
 
-- Smooth volume feedback with native 0.1 dB steps and Reduce Motion support.
+- A main volume fader that smoothly follows hardware knob updates, with direct
+  0.1 dB input and Reduce Motion support.
 - Five-band EQ with a combined response curve, numeric controls,
   and per-output draft editing.
 - Explicit connection and state synchronization through USB MIDI. Hardware
@@ -44,6 +45,21 @@ Choose the device in the sidebar, then click **Connect**. The app reads its
 current state before enabling writes. **Sync** reads settings again after a
 front-panel change. Disconnecting does not reset the hardware. Closing the app
 leaves the ADI-2's settings in place.
+
+The main volume fader draws its track, fill, and knob with Core Animation layers.
+Incoming device values retarget a 0.18-second ease-out from the knob's current
+visible position, including when a new report arrives before the previous move
+finishes. A grabbed thumb starts a drag from the actual volume, even mid-animation.
+Pointer dragging stays immediate; keyboard and accessibility controls
+use the authoritative device value in 0.1 dB steps. Reduce Motion, a disabled
+control, or an output/connection change snaps directly to the target. Animation
+never sends interpolated MIDI values.
+
+A read-only live observation captured 86 physical-knob reports with a typical
+64.3 ms interval. The renderer smooths the main fader between incoming reports;
+it does not change that device cadence. The user tested the new universal build
+with the physical DAC knob and confirmed smooth feedback. This acceptance covers
+the observed DAC workflow, not Pro/2/4 hardware or other release checks.
 
 EQ imports create drafts. Review the curve, band values, and import warnings,
 then choose **Apply EQ to Both Channels**. Imported preamp gain has no direct
@@ -94,9 +110,13 @@ and connection-state test bodies with standalone assertion runners when XCTest
 is unavailable. On a toolchain exposing XCTest, it uses `swift test` instead.
 These tests use fake MIDI and do not verify physical device communication.
 
-Current software validation passes 50 cases with 323 assertions: 33 core cases
-with 205 assertions and 17 app-model cases with 118 assertions. A sandboxed
-universal app builds for Apple silicon and Intel.
+The core and fake-MIDI app-model suites pass 50 cases with 323 assertions:
+33 core cases with 205 assertions and 17 app-model cases with 118 assertions.
+A separate isolated fader suite passes 10 cases with 48 assertions. It samples
+actual presentation-layer positions across display frames, including rapid
+retargeting and reversal, immediate direct input, 0.1 dB keyboard/accessibility
+steps, Reduce Motion, disabled controls, and zero input callbacks from animation.
+A sandboxed universal app builds for Apple silicon and Intel.
 
 The native sandboxed app has been tested with a physical **ADI-2 DAC on Apple
 silicon, macOS 27.2**. USB MIDI discovery, a complete 219-parameter settings
@@ -130,6 +150,26 @@ To choose an output directory:
 ```sh
 ./scripts/build-app.sh --output /absolute/path/to/output
 ```
+
+## Check fader motion with Command Line Tools
+
+The motion harness needs a logged-in graphical Mac session. With Command Line
+Tools installed, run these commands from `macOS` in a GUI terminal:
+
+```sh
+mkdir -p .build/fader-check
+DEVELOPER_DIR=/Library/Developer/CommandLineTools xcrun swiftc -parse-as-library \
+  Sources/ADI2Mac/VolumeFader.swift Tests/ADI2MacTests/VolumeFaderTests.swift \
+  -o .build/fader-check/VolumeFaderCheck
+.build/fader-check/VolumeFaderCheck --report "$PWD/.build/fader-check/results.json"
+```
+
+Click **Run self-check**. The window reports cases, assertions, failures, and
+sampled positions; the JSON report is written after the checks finish. This app
+compiles only the fader component and its tests: it does not construct the app
+model, open CoreMIDI, or contact hardware. The existing `test-cli.sh` runs the
+core/model checks separately. Full Xcode discovers the component cases through
+`swift test`; meaningful motion evidence still requires real window compositing.
 
 ## Xcode and App Store preparation
 

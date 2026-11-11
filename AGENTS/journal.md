@@ -1,3 +1,30 @@
+## 2026-11-11 — Animate the main fader for physical-knob feedback
+
+- Replaced the main fader renderer with a native AppKit control whose track,
+  fill and knob use Core Animation layers. Incoming targets ease over 0.18 s
+  from the current presentation position, retargeting without endpoint jumps
+  or overshoot. Direct input stays immediate and quantized to 0.1 dB; keyboard,
+  accessibility, focus and Reduce Motion remain supported. Animation emits no
+  user-value callbacks or interpolated MIDI.
+- The prior readout/tiny-level-bar smoothing was rejected by the user because
+  the actual main fader still jumped while turning the physical DAC knob. That
+  decorative indicator was removed. A read-only observation captured 86 live
+  knob reports with a typical interval of 64.3 ms; device cadence is unchanged.
+- Validation: 10 isolated component cases / 48 assertions pass, sampling actual
+  presentation geometry across display frames, retargets/reversal, direct input,
+  0.1 dB keyboard/accessibility steps, Reduce Motion, disabled input and callback
+  separation. A mid-animation drag regression also verifies input starts from
+  the actual volume rather than an intermediate animation frame. The universal
+  sandboxed build and bundle checks pass. Reproducible
+  CLT motion-harness instructions are in `macOS/README.md`.
+- Reopened the new universal development app after the user quit the previous
+  build, connected it and restored the pending EQ draft without applying it.
+  The user tested the physical DAC knob and confirmed: “It’s smooth now.” No
+  hardware parameter write or EQ Apply was performed by this change's checks.
+- Acceptance covers the observed live DAC volume feedback. App Store signing,
+  full Xcode archive validation and the other documented hardware workflows
+  remain separate release gates.
+
 ## 2026-11-11 — Smooth volume feedback
 
 - Added brief eased volume readout/level transitions, keeping direct dragging,
