@@ -356,7 +356,7 @@ struct ControlView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text(model.section == "input" ? "Adjust the left and right input EQ independently. Changes apply to the selected input channel." : "Adjust one channel independently, including Bass / Treble and on-device EQ selection. Applying a profile above replaces both channels.")
+                Text(model.section == "input" ? "Adjust the left and right input EQ independently. Changes apply to the selected input channel." : "Adjust left and right bands independently. Choose Left for shared EQ, Bass / Treble and preset controls. Applying a profile above replaces both channels.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 VStack(spacing: 0) {

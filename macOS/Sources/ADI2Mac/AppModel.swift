@@ -43,12 +43,13 @@ typealias ParameterKey = ParameterAddress
     var canWrite: Bool { connected && !demoMode && !syncing && activeDevice?.model == deviceModel }
     var parameterAddress: Int { section == "device" ? 12 : section == "input" ? 0 : selectedOutput.channel }
     var eqParameterAddress: Int { section == "input" ? (eqSide == "right" ? 2 : 1) : (eqSide == "right" ? selectedOutput.right : selectedOutput.left) }
-    var eqParameters: [ParameterDefinition] { ParameterRegistry.eq }
+    var eqParameters: [ParameterDefinition] { ParameterRegistry.eq.filter { eqSide != "right" || (3...19).contains($0.index) } }
     func eqRealValue(_ p: ParameterDefinition) -> Double {
         guard let raw = values[ParameterKey(address:eqParameterAddress,index:p.index)] else { return p.defaultValue }
         return p.kind == "freq" ? Double(raw) : Double(raw) * p.increment
     }
     func setEQParameter(_ p: ParameterDefinition, value: Double) {
+        guard eqSide != "right" || (3...19).contains(p.index) else { return }
         guard value.isFinite, (p.minimum...p.maximum).contains(value), demoMode || (canWrite && values[ParameterKey(address:eqParameterAddress,index:p.index)] != nil) else { return }
         do {
             let raw = Int((value / p.increment).rounded(.toNearestOrEven))
@@ -165,7 +166,7 @@ typealias ParameterKey = ParameterAddress
         } catch { errorMessage = error.localizedDescription; disconnect() }
     }
     private func updateChannelNotice() {
-        let indices = EQProfile.layout.flatMap { [$0.gain,$0.frequency,$0.q] + ($0.type.map { [$0] } ?? []) } + [2,20]
+        let indices = EQProfile.layout.flatMap { [$0.gain,$0.frequency,$0.q] + ($0.type.map { [$0] } ?? []) }
         channelNotice = indices.contains { index in
             values[ParameterKey(address:selectedOutput.left,index:index)] != values[ParameterKey(address:selectedOutput.right,index:index)]
         } ? "Left and right EQ differ. The editor shows the left channel; Apply EQ replaces both channels." : nil

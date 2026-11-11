@@ -83,8 +83,11 @@ final class ADI2CoreTests: XCTestCase {
         for address in [7,8] {
             XCTAssertEqual(values.first {$0.address == address && $0.index == 4}?.raw,13)
             XCTAssertEqual(values.first {$0.address == address && $0.index == 18}?.raw,10000)
-            XCTAssertEqual(values.first {$0.address == address && $0.index == 20}?.raw,0)
         }
+        XCTAssertEqual(values.first {$0.address == 7 && $0.index == 2}?.raw,1)
+        XCTAssertEqual(values.first {$0.address == 7 && $0.index == 20}?.raw,0)
+        XCTAssertFalse(values.contains {$0.address == 8 && $0.index == 2})
+        XCTAssertFalse(values.contains {$0.address == 8 && $0.index >= 20})
         XCTAssertFalse(values.contains {$0.index == 12 && $0.address == 6}) // profile never changes volume
     }
     func testProfileRejectsUnsupportedBandsAndNonFinite() {
@@ -195,7 +198,7 @@ extension ADI2CoreTests {
     }
     func testIncompleteAndInvalidHardwareCannotHydrateReadyState() throws {
         XCTAssertThrowsError(try DeviceStateAccumulator(output:.phones).profile())
-        for (key,value) in [(ParameterAddress(address:7,index:3),99),(ParameterAddress(address:7,index:4),25),(ParameterAddress(address:8,index:6),0),(ParameterAddress(address:8,index:14),199),(ParameterAddress(address:6,index:12),1000),(ParameterAddress(address:8,index:2),2)] {
+        for (key,value) in [(ParameterAddress(address:7,index:3),99),(ParameterAddress(address:7,index:4),25),(ParameterAddress(address:8,index:6),0),(ParameterAddress(address:8,index:14),199),(ParameterAddress(address:6,index:12),1000),(ParameterAddress(address:7,index:2),2)] {
             var values=try validState();values[key]=value
             let state=DeviceStateAccumulator(output:.phones,values:values)
             XCTAssertThrowsError(try state.validate(device:.dac))
@@ -225,8 +228,8 @@ extension ADI2CoreTests {
         XCTAssertEqual(parameters.count,34)
         XCTAssertFalse(parameters.contains {$0.index == 2 || $0.index == 20},"Preset staging faithfully sends bands only; no invented enable/Bass/Treble fields.")
     }
-    func testPresetBoundsNamesAndPairedLoadSelector() throws {
-        XCTAssertEqual(try ADI2Protocol.loadEQPreset(device:0x71,output:.phones,slot:20),hex("F0 00 20 0D 71 02 3F 00 15 47 00 15 F7"))
+    func testPresetBoundsNamesAndLeftLoadSelector() throws {
+        XCTAssertEqual(try ADI2Protocol.loadEQPreset(device:0x71,output:.phones,slot:20),hex("F0 00 20 0D 71 02 3F 00 15 F7"))
         XCTAssertEqual(try EQProfile.flat.presetMessages(device:0x73,slot:1).count,2)
         for slot in [0,21] {
             XCTAssertThrowsError(try EQProfile.flat.presetMessages(device:0x71,slot:slot))
@@ -286,8 +289,66 @@ extension ADI2CoreTests {
         values[ParameterAddress(address:13,index:2)] = 19 << 4
         values[ParameterAddress(address:14,index:2)] = 19 << 4
         XCTAssertNoThrow(try DeviceStateAccumulator(output:.phones,values:values).validate(device:.dac))
-        values[ParameterAddress(address:8,index:2)] = 19 << 4
+        values[ParameterAddress(address:7,index:2)] = 19 << 4
         XCTAssertThrowsError(try DeviceStateAccumulator(output:.phones,values:values).validate(device:.dac))
+    }
+}
+
+extension ADI2CoreTests {
+    /// Synthetic values with the observed device block shape. It contains no
+    /// physical device identifiers or copied user EQ values.
+    func hardwareShapeFixture(output:Output) -> [ParameterAddress:Int] {
+        var values:[ParameterAddress:Int] = [ParameterAddress(address:output.channel,index:12):-300,ParameterAddress(address:output.channel,index:20):0]
+        let bands:[Int:Int] = [2:1,3:0,4:0,5:1000,6:10,7:0,8:1000,9:10,10:0,11:1000,12:10,13:0,14:1000,15:10,16:0,17:0,18:1000,19:10]
+        for address in [output.left,output.right] {
+            for (index,value) in bands { values[ParameterAddress(address:address,index:index)] = value }
+        }
+        let shared:[Int:Int] = [20:1,21:0,22:85,23:9,24:0,25:6500,26:7,27:0,28:0]
+        for (index,value) in shared { values[ParameterAddress(address:output.left,index:index)] = value }
+        return values
+    }
+    func testObservedRightBlockWithoutSharedFlagsIsComplete() throws {
+        for output in Output.allCases {
+            var values=hardwareShapeFixture(output:output)
+            values[ParameterAddress(address:output.right,index:2)] = nil
+            let state=DeviceStateAccumulator(output:output,values:values)
+            XCTAssertTrue(state.isComplete)
+            XCTAssertTrue(try state.profile().bassTrebleEnabled)
+            XCTAssertTrue(try state.profile(right:true).bassTrebleEnabled)
+            XCTAssertTrue(try state.profile().eqEnabled)
+            XCTAssertTrue(try state.profile(right:true).eqEnabled)
+            XCTAssertNoThrow(try state.validate(device:.pro24))
+            XCTAssertFalse(DeviceStateAccumulator.requiredKeys(output:output).contains(ParameterAddress(address:output.right,index:2)))
+            XCTAssertFalse(DeviceStateAccumulator.requiredKeys(output:output).contains(ParameterAddress(address:output.right,index:20)))
+            values[ParameterAddress(address:output.right,index:2)] = 1
+            XCTAssertNoThrow(try DeviceStateAccumulator(output:output,values:values).validate(device:.pro24))
+        }
+    }
+    func testObservedSharedLeftFlagsAndBothBandsRemainRequired() {
+        for missingIndex in [3,4,5,6,16,17,18,19] {
+            var values=hardwareShapeFixture(output:.phones)
+            values[ParameterAddress(address:8,index:missingIndex)] = nil
+            XCTAssertFalse(DeviceStateAccumulator(output:.phones,values:values).isComplete)
+            XCTAssertThrowsError(try DeviceStateAccumulator(output:.phones,values:values).profile(right:true))
+        }
+        for sharedIndex in [2,20] {
+            var values=hardwareShapeFixture(output:.phones)
+            values[ParameterAddress(address:7,index:sharedIndex)] = nil
+            XCTAssertFalse(DeviceStateAccumulator(output:.phones,values:values).isComplete)
+        }
+    }
+    func testProfileAndPresetSelectorNeverInventRightSharedControls() throws {
+        for output in Output.allCases {
+            var profile=EQProfile.flat;profile.output=output
+            let boxes=try ADI2Protocol.parseParameters(profile.containers().flatMap {$0})
+            XCTAssertTrue(boxes.contains {$0.address == output.left && $0.index == 20})
+            XCTAssertTrue(boxes.contains {$0.address == output.left && $0.index == 2})
+            XCTAssertFalse(boxes.contains {$0.address == output.right && $0.index == 2})
+            XCTAssertFalse(boxes.contains {$0.address == output.right && $0.index >= 20})
+            let message=try ADI2Protocol.loadEQPreset(device:0x73,output:output,slot:1)
+            let selector=try ADI2Protocol.parseParameters(ADI2Protocol.parse(message)!.payload)
+            XCTAssertEqual(selector,[ParameterValue(address:output.left,index:28,raw:2)])
+        }
     }
 }
 
@@ -321,11 +382,14 @@ extension ADI2CoreTests {
  try tests.testIncompleteAndInvalidHardwareCannotHydrateReadyState()
  try tests.testKnownParametersValidateAndUnknownRemainForwardCompatible()
  try tests.testPresetSaveMatchesLinuxWireOracleAndSeparateCommit()
- try tests.testPresetBoundsNamesAndPairedLoadSelector()
+ try tests.testPresetBoundsNamesAndLeftLoadSelector()
  try tests.testLocalLibraryRoundTripUniqueNamesAndRemoval()
  try tests.testLocalLibraryListsHealthyProfilesAlongsideCorruptFiles()
  try tests.testPresetBufferCommitFlagIsNotValidatedAsLiveEQEnable()
- print("ADI2Core: 30 cases, \(assertionCount) assertions, \(failureCount) failures")
+ try tests.testObservedRightBlockWithoutSharedFlagsIsComplete()
+ tests.testObservedSharedLeftFlagsAndBothBandsRemainRequired()
+ try tests.testProfileAndPresetSelectorNeverInventRightSharedControls()
+ print("ADI2Core: 33 cases, \(assertionCount) assertions, \(failureCount) failures")
  if failureCount > 0 {exit(1)}
  }
 }

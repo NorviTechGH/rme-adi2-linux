@@ -1,3 +1,18 @@
+## 2026-11-11 — Correct shared EQ controls and verify physical DAC communication
+
+- A real DAC returned 219 parameters; the first Mac connection timed out because
+  the port incorrectly required a right-side Bass/Treble flag. Aligned readiness,
+  flag hydration, profile writes, preset selection and right-side controls with
+  RME MIDITable v1.2's documented left-only shared controls.
+- Validation: 50 Swift cases / 323 assertions pass. The universal sandboxed app
+  connects to the DAC, reads live EQ, and writes/reads/restores a 0.1 dB Phones
+  volume change. No persistent memory slot was written. Details and remaining
+  acceptance are in `macOS/HARDWARE_TESTING.md`.
+- Source publication still awaits the publishing account's repository write
+  access decision. Full Xcode, distribution signing and wider hardware tests
+  remain release requirements. No Apple submission or account change occurred.
+- Next: validate EQ/preset workflows and the distribution-signed Xcode archive.
+
 ## 2026-11-10 — Profile library and device memory parity
 
 - Added sandbox-local profile Save/Load, 20 EQ preset slots and nine device

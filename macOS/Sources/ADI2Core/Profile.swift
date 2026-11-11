@@ -29,8 +29,12 @@ public struct EQProfile: Codable, Equatable, Sendable {
         try validate()
         var boxes: [[UInt8]] = []
         for address in [output.left, output.right] {
-            boxes.append(try ADI2Protocol.encode(address: address, index: 2, raw: eqEnabled ? 1 : 0))
-            boxes.append(try ADI2Protocol.encode(address: address, index: 20, raw: bassTrebleEnabled ? 1 : 0))
+            // RME MIDITable v1.2 places both enable switches on the left
+            // EQ address. Only the band containers are sent to both sides.
+            if address == output.left {
+                boxes.append(try ADI2Protocol.encode(address: address, index: 2, raw: eqEnabled ? 1 : 0))
+                boxes.append(try ADI2Protocol.encode(address: address, index: 20, raw: bassTrebleEnabled ? 1 : 0))
+            }
             for (i,b) in bands.enumerated() {
                 let l = Self.layout[i]
                 if let t = l.type { boxes.append(try ADI2Protocol.encode(address: address, index: t, raw: Band.types(for:i).firstIndex(of:b.type)!)) }

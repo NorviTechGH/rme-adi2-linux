@@ -30,13 +30,13 @@ extension EQProfile {
     }
 }
 extension ADI2Protocol {
-    /// Manual = 0, Temp = 1, preset N = N+1. Set both EQ sides so that loading
-    /// produces the chosen slot with either linked or independent channel EQ.
+    /// Manual = 0, Temp = 1, preset N = N+1. The output-wide selector exists
+    /// only in the left EQ block, matching the Linux controller and device dump.
     public static func loadEQPreset(device: UInt8, output: Output, slot: Int) throws -> [UInt8] {
         guard DeviceModel.allCases.contains(where: {$0.deviceID == device}) else { throw ADI2Error.invalid("Choose a supported ADI-2 device model.") }
         guard (1...20).contains(slot) else { throw ADI2Error.invalid("EQ preset slot must be between 1 and 20.") }
         if device == DeviceModel.dac.deviceID && output == .phones34 { throw ADI2Error.invalid("Phones 3/4 is available on ADI-2 Pro models.") }
-        let containers = try [output.left,output.right].map { try encode(address:$0,index:28,raw:slot+1) }
+        let containers = [try encode(address:output.left,index:28,raw:slot+1)]
         return parameters(device:device,containers:containers)
     }
 }

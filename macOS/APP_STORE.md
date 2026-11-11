@@ -21,19 +21,33 @@ prepared material from evidence and account work still required.
 The development bundle is not an `.xcarchive`, App Store signed build, installer
 package, notarized distribution, or proof of Apple review acceptance.
 
-Initial development validation passed 46 software cases with 249 assertions and
-built a sandboxed universal app for Apple silicon and Intel. This evidence does
-not establish full Xcode archiving or physical hardware compatibility.
+## Current qualification
+
+- **Software:** 50 cases and 323 assertions pass (core: 33/205; app model:
+  17/118). A sandboxed universal development app builds for Apple silicon and
+  Intel.
+- **Physical ADI-2 DAC, Apple silicon, macOS 27.2:** The native sandboxed app
+  discovers the device and reads its complete 219-parameter settings state.
+  A GUI Phones volume reduction of 0.1 dB and restoration passed, with fresh
+  Sync readback confirming each step.
+- **Remaining scope:** Pro/2/4 hardware, unplug/replug, EQ Apply readback,
+  EQ/setup memory recall/save, and Intel runtime behavior remain
+  unverified. Full Xcode archive validation and Apple distribution signing
+  remain open too.
+
+The basic DAC evidence above does not qualify every advertised control or the
+other device models. Store submission still depends on the release gates below.
 
 ## Release gates still open
 
-1. **Real hardware qualification:** Test the signed sandboxed Mac app with each
-   advertised ADI-2 model and supported firmware. Check discovery, input/output
-   pairing, sync, EQ writes and readback, parameter edits, hardware EQ slot
+1. **Complete hardware qualification:** Extend the basic DAC checks above to
+   every advertised workflow and ADI-2 model/firmware. Check input/output
+   pairing, EQ writes and readback, other parameter edits, hardware EQ slot
    recall/save/names, setup recall/save, unplug/replug, device power cycling,
    and coexistence with other MIDI apps. Record model, firmware,
    Mac architecture, OS version, app revision, and observed results. Until
-   then, describe those models as implementation targets, not validated support.
+   then, describe the untested models and workflows as implementation targets,
+   not validated support.
 2. **Full Xcode validation:** Open the project, resolve its local package, build
    both architectures, archive, validate, and test the final signed build on the
    current macOS release. The initial development host has Command Line Tools
@@ -143,7 +157,10 @@ Loading a setup can change device-wide volume/routing and replaces the editor
 state. Setup saves use current hardware settings, excluding unapplied drafts.
 EQ memory saves contain the five bands, not Bass/Treble or Loudness switches.
 
-Before submitting these notes, add the exact tested Mac/OS/device/firmware list,
+The current physical check covers DAC discovery, full settings sync, and a
+0.1 dB Phones volume reduction/restoration on Apple silicon with macOS 27.2.
+Before submitting these notes, complete the remaining workflow qualification,
+add the exact tested Mac/OS/device/firmware list,
 attach the required camera video, and provide any hardware/resources Apple needs
 for complete review. Keep the model claims consistent with the final description.
 
@@ -162,15 +179,30 @@ collected data, or required-reason API use. Apple documents collected-data
 information across all platforms, while its current required-reason API scope
 lists iOS, iPadOS, tvOS, visionOS, and watchOS. Recheck current rules at release.
 
+## RME protocol reference
+
+RME's [official protocol archive](https://www.rme-audio.de/downloads/adi2remote_midi_protocol.zip)
+is linked from the [Remote manual](https://rme-audio.de/downloads/adi2remote_e.pdf),
+page 3. Its `MIDITable_ADI-2_261030.ods` is version 1.2, dated October 30, 2026,
+with firmware bases Pro 130, DAC 62, 2/4 SE 43, and 2/4 EX 106.
+
+The `Channels` sheet documents EQ Enable index 2 on the left addresses
+(`A80:G80`), left-only Bass/Treble indices 20–26 (`G99`, `A100:B106`), and
+left-only preset behavior indices 27–28 (`G107`, `A108:H110`). Band controls
+3–19 are bilateral. Incoming right-channel index 2 appears in both the official
+examples and the live DAC dump; accepting that report does not imply a right-side
+write contract. The app requires and writes the shared controls at their
+documented left addresses.
+
 ## Apple references checked November 10, 2026
 
 - [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/):
   sandboxed, self-contained Mac app packaging, public APIs, metadata, privacy,
   and intellectual-property requirements.
 - [Configuring the macOS App Sandbox](https://developer.apple.com/documentation/xcode/configuring-the-macos-app-sandbox):
-  sandbox capability and resource entitlements. Local CoreMIDI access must be
-  verified in the signed app; no speculative MIDI or broad USB/network/audio
-  entitlements are included.
+  sandbox capability and resource entitlements. Basic local CoreMIDI access is
+  now verified in the sandboxed development app; no speculative MIDI or broad
+  USB/network/audio entitlements are included.
 - [Complete review information](https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review):
   actual-device hardware video and tested device/OS information.
 - [Distribution workflow](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases):

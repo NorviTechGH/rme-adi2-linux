@@ -12,9 +12,8 @@ public struct DeviceStateAccumulator: Sendable {
     public private(set) var values: [ParameterAddress:Int] = [:]
     public init(output: Output, values: [ParameterAddress:Int] = [:]) { self.output = output; self.values = values }
     public static func requiredKeys(output: Output) -> Set<ParameterAddress> {
-        var keys: Set<ParameterAddress> = [ParameterAddress(address:output.channel,index:12),ParameterAddress(address:output.channel,index:20)]
+        var keys: Set<ParameterAddress> = [ParameterAddress(address:output.channel,index:12),ParameterAddress(address:output.channel,index:20),ParameterAddress(address:output.left,index:2),ParameterAddress(address:output.left,index:20)]
         for address in [output.left,output.right] {
-            for index in [2,20] { keys.insert(ParameterAddress(address:address,index:index)) }
             for layout in EQProfile.layout {
                 for index in [layout.gain,layout.frequency,layout.q] { keys.insert(ParameterAddress(address:address,index:index)) }
                 if let type = layout.type { keys.insert(ParameterAddress(address:address,index:type)) }
@@ -52,7 +51,7 @@ public struct DeviceStateAccumulator: Sendable {
             } else { type = "Peak" }
             return Band(type:type,gainDB:Double(try raw(layout.gain)) * 0.5,frequency:Double(try raw(layout.frequency)),q:Double(try raw(layout.q)) / 10)
         }
-        let profile = EQProfile(name:"Hardware EQ",output:output,bands:bands,eqEnabled:try flag(2),bassTrebleEnabled:try flag(20),loudnessEnabled:try flag(20,address:output.channel))
+        let profile = EQProfile(name:"Hardware EQ",output:output,bands:bands,eqEnabled:try flag(2,address:output.left),bassTrebleEnabled:try flag(20,address:output.left),loudnessEnabled:try flag(20,address:output.channel))
         try profile.validate()
         let volume = try raw(12,address:output.channel)
         guard (-1145...60).contains(volume) else { throw ADI2Error.invalid("The hardware returned an invalid output volume.") }
@@ -74,7 +73,10 @@ public struct DeviceStateAccumulator: Sendable {
                 definitions = ParameterRegistry.output(for:device,output:output)
             } else if ADI2Protocol.frequencyAddresses.contains(key.address) {
                 if device == .dac && [1,2,10,11].contains(key.address) {continue}
-                definitions = ParameterRegistry.eq
+                // RME MIDITable v1.2 documents EQ enable, Bass/Treble and
+                // preset controls on left EQ addresses only. A reported right
+                // enable field is not a documented right-side control.
+                definitions = [2,5,8,11].contains(key.address) ? ParameterRegistry.eq.filter {(3...19).contains($0.index)} : ParameterRegistry.eq
             } else {continue}
             guard let p = definitions.first(where: {$0.index == key.index}) else {continue}
             let real = p.kind == "freq" ? Double(raw) : Double(raw) * p.increment

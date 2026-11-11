@@ -35,8 +35,9 @@ processed by this app; the ADI-2 performs its DSP.
 
 - macOS 14 or later.
 - An ADI-2 with firmware supporting RME's MIDI control protocol, connected by USB.
-- Enable **MIDI Control** in the hardware's Setup / Device Mode / DSD options
-  (menu wording depends on model and firmware).
+- Enable **MIDI Control** on the hardware. RME's current Remote manual names
+  **Remap Keys/Diag** for the DAC and **Device Mode** for Pro/2/4 models;
+  menu wording can vary with firmware.
 
 Choose the device in the sidebar, then click **Connect**. The app reads its
 current state before enabling writes. **Sync** reads settings again after a
@@ -92,9 +93,18 @@ and connection-state test bodies with standalone assertion runners when XCTest
 is unavailable. On a toolchain exposing XCTest, it uses `swift test` instead.
 These tests use fake MIDI and do not verify physical device communication.
 
-Initial development validation passed 46 cases with 249 assertions and built
-a sandboxed universal app for Apple silicon and Intel. Full Xcode archiving,
-Apple distribution signing, and physical ADI-2 communication remain unverified.
+Current software validation passes 50 cases with 323 assertions: 33 core cases
+with 205 assertions and 17 app-model cases with 118 assertions. A sandboxed
+universal app builds for Apple silicon and Intel.
+
+The native sandboxed app has been tested with a physical **ADI-2 DAC on Apple
+silicon, macOS 27.2**. USB MIDI discovery, a complete 219-parameter settings
+read, and a GUI Phones volume reduction of 0.1 dB followed by restoration all
+passed, with a fresh hardware Sync confirming each volume step.
+
+This qualifies those basic DAC workflows. Pro/2/4 models, unplug/replug, EQ Apply
+readback, EQ/setup memory recall/save, Intel runtime behavior, full Xcode
+archiving, and Apple distribution signing remain unverified.
 
 To open the demo directly:
 
@@ -134,9 +144,26 @@ TestFlight & App Store. An Apple account, signing assets, App Store Connect
 record, and complete review metadata are required.
 
 See [App Store preparation](APP_STORE.md) for the remaining release work and
-current Apple source links. Full Xcode archiving, distribution signing, and real
-ADI-2 communication from the sandboxed Mac build still need to be verified.
-Linux hardware verification does not establish macOS hardware compatibility.
+current Apple source links. Full Xcode archiving and distribution signing still
+need verification. The DAC checks above do not establish Pro/2/4 compatibility
+or qualify the remaining EQ and persistent-memory workflows.
+
+## Protocol reference
+
+The authoritative reference is RME's
+[MIDI protocol download](https://www.rme-audio.de/downloads/adi2remote_midi_protocol.zip),
+linked from its [ADI-2 Remote manual](https://rme-audio.de/downloads/adi2remote_e.pdf).
+The archive contains `MIDITable_ADI-2_261030.ods`, version 1.2, dated
+October 30, 2026; its stated firmware bases are Pro 130, DAC 62, 2/4 SE 43,
+and 2/4 EX 106.
+
+In the `Channels` sheet, EQ Enable (index 2, row 80), Bass/Treble (indices
+20–26, rows 99–106), and preset behavior (indices 27–28, rows 107–110) are shared
+controls on the documented left EQ addresses. Bilateral band controls use
+indices 3–19. The official examples and the live DAC settings dump also report
+index 2 on right EQ addresses; the app accepts that incoming state without
+requiring it or sending a right-side enable/tone/preset write. Shared switches
+are written once at their documented left address.
 
 ## Source layout
 

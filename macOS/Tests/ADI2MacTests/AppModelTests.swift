@@ -261,6 +261,33 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(model.hasDraft)
         XCTAssertEqual(fake.attempts.count,0)
     }
+    func testRightEQSurfaceAndWriteGuardExcludeSharedControls() async throws {
+        let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
+        defer {model.disconnect()}
+        try ready(fake,model)
+        XCTAssertTrue(model.channelNotice == nil,"Equal bands do not differ because optional right shared fields are absent.")
+        // Some firmware reports right enable; tolerate that inbound report, but
+        // never treat it or any reported extra shared field as a writable control.
+        fake.deliver([try ADI2Protocol.encode(address:8,index:2,raw:0),try ADI2Protocol.encode(address:8,index:20,raw:1),try ADI2Protocol.encode(address:8,index:28,raw:3)])
+        XCTAssertTrue(model.canWrite)
+        XCTAssertTrue(model.channelNotice == nil,"A different optional right enable report cannot create a band asymmetry warning.")
+        model.eqSide="right"
+        XCTAssertEqual(model.eqParameters.map(\.index).sorted(),Array(3...19))
+        let before=fake.attempts.count
+        for index in [2,20,28] {
+            let shared=try XCTUnwrap(ParameterRegistry.eq.first {$0.index == index})
+            model.setEQParameter(shared,value:shared.defaultValue)
+        }
+        XCTAssertEqual(fake.attempts.count,before,"Direct method calls cannot bypass the right-side control filter, even for observed fields.")
+        XCTAssertTrue(model.canWrite)
+        let gain=try XCTUnwrap(ParameterRegistry.eq.first {$0.index == 4})
+        model.setEQParameter(gain,value:1)
+        XCTAssertEqual(fake.attempts.count,before+1,"Documented right-band edits remain available.")
+        let message=try XCTUnwrap(ADI2Protocol.parse(fake.sent.last!))
+        XCTAssertEqual(try ADI2Protocol.parseParameters(message.payload),[ParameterValue(address:8,index:4,raw:2)])
+        model.eqSide="left"
+        for index in [2,20,28] { XCTAssertTrue(model.eqParameters.contains {$0.index == index}) }
+    }
     func testDeviceRemovalRevokesWriteReadiness() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         try ready(fake,model)
@@ -291,8 +318,9 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         try await tests.testDemoMemoryRoundTripsWithoutPhysicalMIDI()
         try await tests.testSetupCommandsRequireFreshReadAndFailureRevokesReadiness()
         try await tests.testLocalProfileLoadStaysDraftUntilExplicitApply()
+        try await tests.testRightEQSurfaceAndWriteGuardExcludeSharedControls()
         try await tests.testDeviceRemovalRevokesWriteReadiness()
-        print("AppModel: 16 cases, \(assertionCount) assertions, \(failureCount) failures")
+        print("AppModel: 17 cases, \(assertionCount) assertions, \(failureCount) failures")
         if failureCount > 0 {exit(1)}
     }
 }
