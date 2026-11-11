@@ -1,0 +1,396 @@
+#if canImport(XCTest)
+import XCTest
+#else
+import Foundation
+private var assertionCount = 0
+private var failureCount = 0
+class XCTestCase {}
+func XCTAssertTrue(_ value: @autoclosure () throws -> Bool, _ message:String = "", file:StaticString=#filePath,line:UInt=#line) { assertionCount += 1; do { if try !value() {failureCount += 1; print("FAIL \(file):\(line) \(message)")} } catch {failureCount += 1;print("FAIL \(file):\(line) \(error)")} }
+func XCTAssertFalse(_ value: @autoclosure () throws -> Bool, _ message:String = "", file:StaticString=#filePath,line:UInt=#line) { XCTAssertTrue(try !value(),message,file:file,line:line) }
+func XCTAssertEqual<T:Equatable>(_ a: @autoclosure () throws -> T, _ b: @autoclosure () throws -> T, _ message:String = "", file:StaticString=#filePath,line:UInt=#line) { XCTAssertTrue(try a() == b(),message,file:file,line:line) }
+func XCTAssertEqual(_ a:Double,_ b:Double,accuracy:Double,file:StaticString=#filePath,line:UInt=#line) { XCTAssertTrue(abs(a-b)<=accuracy,file:file,line:line) }
+func XCTAssertNil<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) { XCTAssertTrue(value == nil,file:file,line:line) }
+func XCTAssertThrowsError<T>(_ value: @autoclosure () throws -> T,_ message:String = "",file:StaticString=#filePath,line:UInt=#line) { do {_ = try value();XCTAssertTrue(false,message,file:file,line:line)} catch {assertionCount += 1} }
+func XCTAssertNoThrow<T>(_ value: @autoclosure () throws -> T,_ message:String = "",file:StaticString=#filePath,line:UInt=#line) { do {_ = try value();assertionCount += 1} catch {XCTAssertTrue(false,"\(message) \(error)",file:file,line:line)} }
+func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws -> T { guard let value else {XCTAssertTrue(false,file:file,line:line);throw ADI2Error.invalid("Missing value")};return value }
+#endif
+@testable import ADI2Core
+
+final class ADI2CoreTests: XCTestCase {
+    func hex(_ string:String) -> [UInt8] { string.split(separator:" ").map {UInt8($0,radix:16)!} }
+    func testOfficialVolumeOracle() throws {
+        XCTAssertEqual(ADI2Protocol.parameters(device:0x73,containers:[try ADI2Protocol.encode(address:9,index:12,raw:-100)]),hex("F0 00 20 0D 73 02 4B 1F 1C F7"))
+    }
+    func testOfficialInputAndRequestOracles() throws {
+        XCTAssertEqual(ADI2Protocol.parameters(device:0x73,containers:[try ADI2Protocol.encode(address:0,index:1,raw:2)]),hex("F0 00 20 0D 73 02 00 20 02 F7"))
+        XCTAssertEqual(ADI2Protocol.requestAll(device:0x73),hex("F0 00 20 0D 73 03 09 F7"))
+        XCTAssertEqual(try ADI2Protocol.requestEQPreset(device:0x73,slot:1),hex("F0 00 20 0D 73 03 0B F7"))
+    }
+    func testOfficialFrequencyOracle() throws {
+        XCTAssertEqual(try ADI2Protocol.encodeFrequency(address:14,index:18,hz:10000),hex("74 57 68"))
+        XCTAssertEqual(try ADI2Protocol.parseParameters(hex("74 57 68")),[ParameterValue(address:14,index:18,raw:10000)])
+        XCTAssertEqual(try ADI2Protocol.parseParameters(hex("09 20 64 0A 03 74 4B 1F 1C")),[ParameterValue(address:1,index:5,raw:100),ParameterValue(address:1,index:8,raw:500),ParameterValue(address:9,index:12,raw:-100)])
+    }
+    func testSignedAndDevicePackingBoundaries() throws {
+        for raw in [-2048,-100,-3,0,13,2047] { XCTAssertEqual(try ADI2Protocol.parseParameters(ADI2Protocol.encode(address:7,index:4,raw:raw)).first?.raw,raw) }
+        for (index,raw) in [(1,3),(25,2),(63,2047)] { XCTAssertEqual(try ADI2Protocol.parseParameters(ADI2Protocol.encodeDevice(index:index,raw:raw)),[ParameterValue(address:12,index:index,raw:raw)]) }
+    }
+    func testEncoderRejectsInvalidInputsWithoutTrapping() {
+        XCTAssertThrowsError(try ADI2Protocol.encode(address:16,index:1,raw:0))
+        XCTAssertThrowsError(try ADI2Protocol.encode(address:1,index:-1,raw:0))
+        XCTAssertThrowsError(try ADI2Protocol.encode(address:1,index:1,raw:2048))
+        XCTAssertThrowsError(try ADI2Protocol.encodeFrequency(address:-1,index:1,hz:1000))
+        XCTAssertThrowsError(try ADI2Protocol.encodeFrequency(address:1,index:1,hz:.nan))
+        XCTAssertThrowsError(try ADI2Protocol.encodeFrequency(address:1,index:1,hz:1e300))
+        XCTAssertThrowsError(try ADI2Protocol.encodeDevice(index:64,raw:0))
+        XCTAssertThrowsError(try ADI2Protocol.requestEQPreset(device:0x71,slot:20))
+        XCTAssertThrowsError(try ADI2Protocol.setup(device:0x71,slot:0,save:false))
+    }
+    func testNameAndSetupMessages() throws {
+        let bytes=try ADI2Protocol.name(device:0x73,firstByte:0x21,name:"Setup 1")
+        XCTAssertEqual(bytes.count,24)
+        XCTAssertEqual(String(bytes:bytes[7..<21],encoding:.ascii),"       Setup 1")
+        XCTAssertEqual(Array(bytes[21..<23]),[0,0])
+        XCTAssertEqual(try ADI2Protocol.setup(device:0x71,slot:9,save:true),hex("F0 00 20 0D 71 04 12 F7"))
+    }
+    func testFramerAcrossPacketsAndRealtime() {
+        var framer=SysExFramer()
+        XCTAssertEqual(framer.append(hex("90 7F F0 00 20 F8")),[])
+        XCTAssertEqual(framer.append(hex("0D 71 03 FA 09 F7")),[hex("F0 00 20 0D 71 03 09 F7")])
+    }
+    func testFramerRecoversFromCorruptAndOversizeFrames() {
+        var framer=SysExFramer(maximumLength:8)
+        XCTAssertEqual(framer.append(hex("F0 00 20 0D 71 03 09 00 F7")),[])
+        XCTAssertEqual(framer.append(hex("F0 00 91 00 F7")),[])
+        XCTAssertEqual(framer.append(hex("F0 00 F0 00 20 0D 71 03 09 F7")),[hex("F0 00 20 0D 71 03 09 F7")])
+    }
+    func testParserRejectsForeignAndMalformedMessages() throws {
+        XCTAssertNil(ADI2Protocol.parse(hex("F0 01 20 0D 71 03 09 F7")))
+        XCTAssertNil(ADI2Protocol.parse(hex("F0 00 20 0D 70 03 09 F7")))
+        XCTAssertNil(ADI2Protocol.parse(hex("F0 00 20 0D 71 03 89 F7")))
+        XCTAssertThrowsError(try ADI2Protocol.parseParameters([0,0]))
+        XCTAssertThrowsError(try ADI2Protocol.parseParameters([0,0,0x80]))
+    }
+    func testProfileJSONMatchesLinuxKeysAndRoundTrips() throws {
+        let profile=EQProfile.example
+        let data=try JSONEncoder().encode(profile)
+        let text=String(decoding:data,as:UTF8.self)
+        XCTAssertTrue(text.contains("freq_hz")); XCTAssertTrue(text.contains("gain_db")); XCTAssertTrue(text.contains("eq_enable"))
+        XCTAssertEqual(try JSONDecoder().decode(EQProfile.self,from:data),profile)
+    }
+    func testProfileWireBothChannelsAndSwitches() throws {
+        let values=try ADI2Protocol.parseParameters(EQProfile.example.containers().flatMap {$0})
+        for address in [7,8] {
+            XCTAssertEqual(values.first {$0.address == address && $0.index == 4}?.raw,2)
+            XCTAssertEqual(values.first {$0.address == address && $0.index == 18}?.raw,11000)
+        }
+        XCTAssertEqual(values.first {$0.address == 7 && $0.index == 2}?.raw,1)
+        XCTAssertEqual(values.first {$0.address == 7 && $0.index == 20}?.raw,0)
+        XCTAssertFalse(values.contains {$0.address == 8 && $0.index == 2})
+        XCTAssertFalse(values.contains {$0.address == 8 && $0.index >= 20})
+        XCTAssertFalse(values.contains {$0.index == 12 && $0.address == 6}) // profile never changes volume
+    }
+    func testProfileRejectsUnsupportedBandsAndNonFinite() {
+        var p=EQProfile.flat;p.bands[1].type="Shelf";XCTAssertThrowsError(try p.containers())
+        p = .flat;p.bands[3].frequency=100;XCTAssertThrowsError(try p.containers())
+        p = .flat;p.bands[0].gainDB = .infinity;XCTAssertThrowsError(try p.containers())
+        p.bands=[];XCTAssertThrowsError(try p.containers())
+    }
+    let apo="""
+    Preamp: -3.0 dB
+    Filter 1: ON LSC Fc 90 Hz Gain 1.0 dB Q 0.70
+    Filter 2: ON PK Fc 350 Hz Gain -0.5 dB Q 1.00
+    Filter 3: ON PK Fc 1800 Hz Gain 0.5 dB Q 1.10
+    Filter 4: ON PK Fc 5200 Hz Gain -1.0 dB Q 1.40
+    Filter 5: ON HSC Fc 11000 Hz Gain -0.5 dB Q 0.70
+    """
+    func testAPOImportMatchesIllustrativeExampleAndWarnsPreamp() throws {
+        let r=try EQImporter.parse(text:apo,name:"Example EQ",output:.line)
+        XCTAssertEqual(r.profile.bands,EQProfile.example.bands)
+        XCTAssertEqual(r.profile.output,.line);XCTAssertEqual(r.preampDB,-3.0)
+        XCTAssertTrue(r.warnings.contains {$0.contains("Preamp")})
+    }
+    func testTenBandReductionKeepsStrongestAndReportsDropped() throws {
+        let text=(1...10).map {"Filter \($0): ON PK Fc \($0 * 1000) Hz Gain \($0) dB Q 1"}.joined(separator:"\n")
+        let r=try EQImporter.parse(text:text)
+        XCTAssertEqual(r.profile.bands.map(\.gainDB),[6,7,8,9,10])
+        XCTAssertTrue(r.warnings.contains {$0.contains("Dropped 5")})
+    }
+    func testCSVQuotedHeaderCRLFAndJSONAliases() throws {
+        let csv="\"frequency\",gain_db,q,type\r\n90,1.0,0.7,LS\r\n1800,0.5,1.1,PK\r\n11000,-0.5,0.7,HS\r\n"
+        let r=try EQImporter.parse(text:csv)
+        XCTAssertEqual(r.profile.bands[0].type,"Shelf");XCTAssertEqual(r.profile.bands[4].frequency,11000)
+        let json=#"{"name":"Test","filters":[{"type":"LOW_SHELF","frequency":90,"gain":1,"q":0.7},{"type":"PEAKING","fc":1800,"gain_db":0.5,"q":1.1}]}"#
+        let j=try EQImporter.parse(text:json)
+        XCTAssertEqual(j.profile.name,"Test");XCTAssertEqual(j.profile.bands[1].gainDB,0.5)
+    }
+    func testOwnProfileImportPreservesContentAndSelectsOutput() throws {
+        let text=String(decoding:try JSONEncoder().encode(EQProfile.example),as:UTF8.self)
+        let r=try EQImporter.parse(text:text,output:.line)
+        XCTAssertEqual(r.profile.bands,EQProfile.example.bands);XCTAssertEqual(r.profile.output,.line);XCTAssertEqual(r.warnings,[])
+    }
+    func testImportClampsAndReportsInvalidFilters() throws {
+        let r=try EQImporter.parse(text:"Filter 1: ON LSC Fc 10 Hz Gain 15 dB Q 0.2\nFilter 2: ON LSC Fc 80 Hz Gain 3 dB Q 0.7\nFilter 3: ON PK Fc 24000 Hz Gain -14 dB Q 12")
+        XCTAssertEqual(r.profile.bands[0].frequency,20);XCTAssertEqual(r.profile.bands[0].gainDB,12);XCTAssertEqual(r.profile.bands[0].q,0.5)
+        XCTAssertTrue(r.warnings.contains {$0.contains("extra low shelf")})
+        XCTAssertTrue(r.warnings.contains {$0.contains("20000")})
+    }
+    func testMalformedAndNonFiniteImportsRejectSafely() {
+        for text in ["", "not an eq file", "{broken", #"{"filters":[]}"#, "frequency,gain\nnan,3", "frequency,gain\ninf,3", "\"unterminated"] { XCTAssertThrowsError(try EQImporter.parse(text:text),text) }
+        XCTAssertNoThrow(try EQImporter.parse(text:"frequency,gain\n1e300,3"))
+    }
+    func testEQResponseSanity() {
+        XCTAssertEqual(EQResponse.decibels(profile:.flat,frequency:1000),0,accuracy:1e-9)
+        var p=EQProfile.flat;p.bands[2].gainDB=6
+        XCTAssertEqual(EQResponse.decibels(profile:p,frequency:1000),6,accuracy:0.001)
+        p.eqEnabled=false;XCTAssertEqual(EQResponse.decibels(profile:p,frequency:1000),0)
+    }
+    func testRegistryDeviceFilteringAndWireUnits() throws {
+        XCTAssertEqual(ParameterRegistry.input(for:.dac).count,0)
+        XCTAssertEqual(ParameterRegistry.output(for:.dac,output:.line).first {$0.index == 2}?.labels,["-5 dBu","+1 dBu","+7 dBu","+13 dBu"])
+        let volume=try XCTUnwrap(ParameterRegistry.output(for:.dac,output:.phones).first {$0.index == 12})
+        XCTAssertEqual(try volume.raw(-10),-100)
+        XCTAssertTrue(ParameterRegistry.device(for:.dac).contains {$0.index == 16 && $0.isReadOnly})
+        XCTAssertEqual(Set(ParameterRegistry.eq.map(\.index)).count,ParameterRegistry.eq.count)
+    }
+}
+
+extension ADI2CoreTests {
+    func testSyncRequiresEveryRequiredValueFromFreshRequest() throws {
+        let keys=DeviceStateAccumulator.requiredKeys(output:.phones).sorted { ($0.address,$0.index) < ($1.address,$1.index) }
+        var state=DeviceStateAccumulator(output:.phones)
+        XCTAssertFalse(state.isComplete)
+        let first=Array(keys.dropLast()).map {ParameterValue(address:$0.address,index:$0.index,raw:0)}
+        state.receive(first)
+        XCTAssertFalse(state.isComplete)
+        let last=try XCTUnwrap(keys.last)
+        state.receive([ParameterValue(address:last.address,index:last.index,raw:0)])
+        XCTAssertTrue(state.isComplete)
+        XCTAssertFalse(DeviceStateAccumulator(output:.phones).isComplete)
+        var other=DeviceStateAccumulator(output:.line);other.receive(first)
+        XCTAssertFalse(other.isComplete)
+    }
+    func testSyncRequiresRightChannelAndObservedVolume() {
+        var state=DeviceStateAccumulator(output:.phones)
+        let keys=DeviceStateAccumulator.requiredKeys(output:.phones)
+        state.receive(keys.filter {$0.address != Output.phones.right}.map {ParameterValue(address:$0.address,index:$0.index,raw:0)})
+        XCTAssertFalse(state.isComplete)
+        state.receive(keys.filter {$0.address == Output.phones.right}.map {ParameterValue(address:$0.address,index:$0.index,raw:0)})
+        XCTAssertTrue(state.isComplete)
+        var noVolume=DeviceStateAccumulator(output:.phones)
+        noVolume.receive(keys.filter {!($0.address == 6 && $0.index == 12)}.map {ParameterValue(address:$0.address,index:$0.index,raw:0)})
+        XCTAssertFalse(noVolume.isComplete)
+    }
+}
+
+extension ADI2CoreTests {
+    func validState() throws -> [ParameterAddress:Int] {
+        var state: [ParameterAddress:Int] = [:]
+        for p in try ADI2Protocol.parseParameters(EQProfile.example.containers().flatMap {$0}) { state[ParameterAddress(address:p.address,index:p.index)] = p.raw }
+        state[ParameterAddress(address:6,index:12)] = -100
+        return state
+    }
+    func testValidatedHardwareProfileMatchesBothChannels() throws {
+        let state=DeviceStateAccumulator(output:.phones,values:try validState())
+        XCTAssertEqual(try state.profile().bands,EQProfile.example.bands)
+        XCTAssertEqual(try state.profile(right:true).bands,EQProfile.example.bands)
+        XCTAssertNoThrow(try state.validate(device:.dac))
+    }
+    func testIncompleteAndInvalidHardwareCannotHydrateReadyState() throws {
+        XCTAssertThrowsError(try DeviceStateAccumulator(output:.phones).profile())
+        for (key,value) in [(ParameterAddress(address:7,index:3),99),(ParameterAddress(address:7,index:4),25),(ParameterAddress(address:8,index:6),0),(ParameterAddress(address:8,index:14),199),(ParameterAddress(address:6,index:12),1000),(ParameterAddress(address:7,index:2),2)] {
+            var values=try validState();values[key]=value
+            let state=DeviceStateAccumulator(output:.phones,values:values)
+            XCTAssertThrowsError(try state.validate(device:.dac))
+        }
+    }
+    func testKnownParametersValidateAndUnknownRemainForwardCompatible() throws {
+        var values=try validState()
+        values[ParameterAddress(address:12,index:63)] = 1000
+        XCTAssertNoThrow(try DeviceStateAccumulator(output:.phones,values:values).validate(device:.dac))
+        values[ParameterAddress(address:12,index:2)] = 999
+        XCTAssertThrowsError(try DeviceStateAccumulator(output:.phones,values:values).validate(device:.dac))
+    }
+}
+
+extension ADI2CoreTests {
+    func testPresetSaveMatchesLinuxWireOracleAndSeparateCommit() throws {
+        let messages=try EQProfile.example.presetMessages(device:0x71,slot:2,name:"Studio")
+        // The explicit fixture below is generated by the Linux app's encoding,
+        // including exactly 17 band containers per preset channel.
+        let actualOracle=hex("F0 00 20 0D 71 02 68 60 01 69 00 02 69 20 5A 69 40 07 69 7F 7F 6A 02 5E 6A 20 0A 6A 40 01 6A 6E 08 6B 00 0B 6B 3F 7E 6B 54 08 6B 60 0E 6C 00 01 6C 3F 7F 6C 58 4C 6C 60 07 70 60 01 71 00 02 71 20 5A 71 40 07 71 7F 7F 72 02 5E 72 20 0A 72 40 01 72 6E 08 73 00 0B 73 3F 7E 73 54 08 73 60 0E 74 00 01 74 3F 7F 74 58 4C 74 60 07 F7")
+        XCTAssertEqual(messages.count,3)
+        XCTAssertEqual(messages[0],actualOracle)
+        XCTAssertEqual(messages[0].count,109)
+        XCTAssertEqual(messages[1],hex("F0 00 20 0D 71 02 68 40 10 F7"))
+        XCTAssertEqual(messages[2],hex("F0 00 20 0D 71 06 02 20 20 20 20 20 20 20 20 53 74 75 64 69 6F 00 00 F7"))
+        let parameters=try ADI2Protocol.parseParameters(ADI2Protocol.parse(messages[0])!.payload)
+        XCTAssertEqual(parameters.count,34)
+        XCTAssertFalse(parameters.contains {$0.index == 2 || $0.index == 20},"Preset staging faithfully sends bands only; no invented enable/Bass/Treble fields.")
+    }
+    func testPresetBoundsNamesAndLeftLoadSelector() throws {
+        XCTAssertEqual(try ADI2Protocol.loadEQPreset(device:0x71,output:.phones,slot:20),hex("F0 00 20 0D 71 02 3F 00 15 F7"))
+        XCTAssertEqual(try EQProfile.flat.presetMessages(device:0x73,slot:1).count,2)
+        for slot in [0,21] {
+            XCTAssertThrowsError(try EQProfile.flat.presetMessages(device:0x71,slot:slot))
+            XCTAssertThrowsError(try ADI2Protocol.loadEQPreset(device:0x71,output:.phones,slot:slot))
+        }
+        XCTAssertThrowsError(try EQProfile.flat.presetMessages(device:0x70,slot:1))
+        XCTAssertThrowsError(try ADI2Protocol.loadEQPreset(device:0x71,output:.phones34,slot:1))
+        XCTAssertThrowsError(try EQProfile.flat.presetMessages(device:0x71,slot:1,name:"123456789012345"))
+        XCTAssertThrowsError(try EQProfile.flat.presetMessages(device:0x71,slot:1,name:"Héllo"))
+        XCTAssertThrowsError(try EQProfile.flat.presetMessages(device:0x71,slot:1,name:"Bad\nName"))
+        var bad=EQProfile.flat;bad.bands=[]
+        XCTAssertThrowsError(try bad.presetMessages(device:0x71,slot:1))
+    }
+    func testLocalLibraryRoundTripUniqueNamesAndRemoval() throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString,isDirectory:true)
+        defer {try? FileManager.default.removeItem(at:root)}
+        let library=FileProfileLibrary(directory:root)
+        var profile=EQProfile.example;profile.name="../../A profile / with a path"
+        let first=try library.save(profile),second=try library.save(profile)
+        XCTAssertFalse(first.id == second.id)
+        XCTAssertTrue(UUID(uuidString:first.id) != nil)
+        XCTAssertEqual(try library.list().profiles.count,2)
+        XCTAssertEqual(try library.list().profiles.first?.profile,profile)
+        let file=root.appendingPathComponent(first.id + ".json")
+        let text=try String(contentsOf:file,encoding:.utf8)
+        XCTAssertTrue(text.contains("freq_hz"));XCTAssertTrue(text.contains("eq_enable"))
+        XCTAssertEqual(try EQImporter.parse(text:text).profile.bands,profile.bands)
+        try library.remove(id:first.id)
+        XCTAssertEqual(try library.list().profiles.map(\.id),[second.id])
+        XCTAssertThrowsError(try library.remove(id:"../outside"))
+    }
+    func testLocalLibraryListsHealthyProfilesAlongsideCorruptFiles() throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString,isDirectory:true)
+        defer {try? FileManager.default.removeItem(at:root)}
+        let library=FileProfileLibrary(directory:root)
+        var z=EQProfile.flat;z.name="Zulu"
+        var a=EQProfile.flat;a.name="Alpha"
+        _ = try library.save(z);_ = try library.save(a)
+        try Data("{broken".utf8).write(to:root.appendingPathComponent(UUID().uuidString + ".json"))
+        let outside=root.appendingPathComponent("target.txt")
+        try Data("private unrelated file".utf8).write(to:outside)
+        let linkID=UUID().uuidString
+        try FileManager.default.createSymbolicLink(at:root.appendingPathComponent(linkID + ".json"),withDestinationURL:outside)
+        let listing=try library.list()
+        XCTAssertEqual(listing.profiles.map { $0.profile.name },["Alpha","Zulu"])
+        XCTAssertEqual(listing.warnings.count,2)
+        XCTAssertThrowsError(try library.remove(id:linkID))
+        XCTAssertTrue(FileManager.default.fileExists(atPath:outside.path))
+        var invalid=EQProfile.flat;invalid.bands[0].gainDB=100
+        XCTAssertThrowsError(try library.save(invalid))
+    }
+}
+
+extension ADI2CoreTests {
+    func testPresetBufferCommitFlagIsNotValidatedAsLiveEQEnable() throws {
+        var values=try validState()
+        values[ParameterAddress(address:13,index:2)] = 19 << 4
+        values[ParameterAddress(address:14,index:2)] = 19 << 4
+        XCTAssertNoThrow(try DeviceStateAccumulator(output:.phones,values:values).validate(device:.dac))
+        values[ParameterAddress(address:7,index:2)] = 19 << 4
+        XCTAssertThrowsError(try DeviceStateAccumulator(output:.phones,values:values).validate(device:.dac))
+    }
+}
+
+extension ADI2CoreTests {
+    /// Synthetic values with the observed device block shape. It contains no
+    /// physical device identifiers or copied user EQ values.
+    func hardwareShapeFixture(output:Output) -> [ParameterAddress:Int] {
+        var values:[ParameterAddress:Int] = [ParameterAddress(address:output.channel,index:12):-300,ParameterAddress(address:output.channel,index:20):0]
+        let bands:[Int:Int] = [2:1,3:0,4:0,5:1000,6:10,7:0,8:1000,9:10,10:0,11:1000,12:10,13:0,14:1000,15:10,16:0,17:0,18:1000,19:10]
+        for address in [output.left,output.right] {
+            for (index,value) in bands { values[ParameterAddress(address:address,index:index)] = value }
+        }
+        let shared:[Int:Int] = [20:1,21:0,22:85,23:9,24:0,25:6500,26:7,27:0,28:0]
+        for (index,value) in shared { values[ParameterAddress(address:output.left,index:index)] = value }
+        return values
+    }
+    func testObservedRightBlockWithoutSharedFlagsIsComplete() throws {
+        for output in Output.allCases {
+            var values=hardwareShapeFixture(output:output)
+            values[ParameterAddress(address:output.right,index:2)] = nil
+            let state=DeviceStateAccumulator(output:output,values:values)
+            XCTAssertTrue(state.isComplete)
+            XCTAssertTrue(try state.profile().bassTrebleEnabled)
+            XCTAssertTrue(try state.profile(right:true).bassTrebleEnabled)
+            XCTAssertTrue(try state.profile().eqEnabled)
+            XCTAssertTrue(try state.profile(right:true).eqEnabled)
+            XCTAssertNoThrow(try state.validate(device:.pro24))
+            XCTAssertFalse(DeviceStateAccumulator.requiredKeys(output:output).contains(ParameterAddress(address:output.right,index:2)))
+            XCTAssertFalse(DeviceStateAccumulator.requiredKeys(output:output).contains(ParameterAddress(address:output.right,index:20)))
+            values[ParameterAddress(address:output.right,index:2)] = 1
+            XCTAssertNoThrow(try DeviceStateAccumulator(output:output,values:values).validate(device:.pro24))
+        }
+    }
+    func testObservedSharedLeftFlagsAndBothBandsRemainRequired() {
+        for missingIndex in [3,4,5,6,16,17,18,19] {
+            var values=hardwareShapeFixture(output:.phones)
+            values[ParameterAddress(address:8,index:missingIndex)] = nil
+            XCTAssertFalse(DeviceStateAccumulator(output:.phones,values:values).isComplete)
+            XCTAssertThrowsError(try DeviceStateAccumulator(output:.phones,values:values).profile(right:true))
+        }
+        for sharedIndex in [2,20] {
+            var values=hardwareShapeFixture(output:.phones)
+            values[ParameterAddress(address:7,index:sharedIndex)] = nil
+            XCTAssertFalse(DeviceStateAccumulator(output:.phones,values:values).isComplete)
+        }
+    }
+    func testProfileAndPresetSelectorNeverInventRightSharedControls() throws {
+        for output in Output.allCases {
+            var profile=EQProfile.flat;profile.output=output
+            let boxes=try ADI2Protocol.parseParameters(profile.containers().flatMap {$0})
+            XCTAssertTrue(boxes.contains {$0.address == output.left && $0.index == 20})
+            XCTAssertTrue(boxes.contains {$0.address == output.left && $0.index == 2})
+            XCTAssertFalse(boxes.contains {$0.address == output.right && $0.index == 2})
+            XCTAssertFalse(boxes.contains {$0.address == output.right && $0.index >= 20})
+            let message=try ADI2Protocol.loadEQPreset(device:0x73,output:output,slot:1)
+            let selector=try ADI2Protocol.parseParameters(ADI2Protocol.parse(message)!.payload)
+            XCTAssertEqual(selector,[ParameterValue(address:output.left,index:28,raw:2)])
+        }
+    }
+}
+
+#if !canImport(XCTest)
+@main struct CoreTestRunner {
+ static func main() throws {
+ let tests=ADI2CoreTests()
+ try tests.testOfficialVolumeOracle()
+ try tests.testOfficialInputAndRequestOracles()
+ try tests.testOfficialFrequencyOracle()
+ try tests.testSignedAndDevicePackingBoundaries()
+ tests.testEncoderRejectsInvalidInputsWithoutTrapping()
+ try tests.testNameAndSetupMessages()
+ tests.testFramerAcrossPacketsAndRealtime()
+ tests.testFramerRecoversFromCorruptAndOversizeFrames()
+ try tests.testParserRejectsForeignAndMalformedMessages()
+ try tests.testProfileJSONMatchesLinuxKeysAndRoundTrips()
+ try tests.testProfileWireBothChannelsAndSwitches()
+ tests.testProfileRejectsUnsupportedBandsAndNonFinite()
+ try tests.testAPOImportMatchesIllustrativeExampleAndWarnsPreamp()
+ try tests.testTenBandReductionKeepsStrongestAndReportsDropped()
+ try tests.testCSVQuotedHeaderCRLFAndJSONAliases()
+ try tests.testOwnProfileImportPreservesContentAndSelectsOutput()
+ try tests.testImportClampsAndReportsInvalidFilters()
+ tests.testMalformedAndNonFiniteImportsRejectSafely()
+ tests.testEQResponseSanity()
+ try tests.testRegistryDeviceFilteringAndWireUnits()
+ try tests.testSyncRequiresEveryRequiredValueFromFreshRequest()
+ tests.testSyncRequiresRightChannelAndObservedVolume()
+ try tests.testValidatedHardwareProfileMatchesBothChannels()
+ try tests.testIncompleteAndInvalidHardwareCannotHydrateReadyState()
+ try tests.testKnownParametersValidateAndUnknownRemainForwardCompatible()
+ try tests.testPresetSaveMatchesLinuxWireOracleAndSeparateCommit()
+ try tests.testPresetBoundsNamesAndLeftLoadSelector()
+ try tests.testLocalLibraryRoundTripUniqueNamesAndRemoval()
+ try tests.testLocalLibraryListsHealthyProfilesAlongsideCorruptFiles()
+ try tests.testPresetBufferCommitFlagIsNotValidatedAsLiveEQEnable()
+ try tests.testObservedRightBlockWithoutSharedFlagsIsComplete()
+ tests.testObservedSharedLeftFlagsAndBothBandsRemainRequired()
+ try tests.testProfileAndPresetSelectorNeverInventRightSharedControls()
+ print("ADI2Core: 33 cases, \(assertionCount) assertions, \(failureCount) failures")
+ if failureCount > 0 {exit(1)}
+ }
+}
+#endif

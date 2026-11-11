@@ -1,0 +1,39 @@
+{
+  "name": "Listening profile",
+  "output": "phones",
+  "bands": [
+    {
+      "type": "Shelf",
+      "gain_db": 1.5,
+      "freq_hz": 105,
+      "q": 0.7
+    },
+    {
+      "type": "Peak",
+      "gain_db": -1,
+      "freq_hz": 320,
+      "q": 1.2
+    },
+    {
+      "type": "Peak",
+      "gain_db": 0.5,
+      "freq_hz": 1600,
+      "q": 1.5
+    },
+    {
+      "type": "Peak",
+      "gain_db": -2,
+      "freq_hz": 5500,
+      "q": 2
+    },
+    {
+      "type": "Shelf",
+      "gain_db": -1.5,
+      "freq_hz": 10000,
+      "q": 0.7
+    }
+  ],
+  "eq_enable": true,
+  "bass_treble_enable": false,
+  "loudness_enable": false
+}

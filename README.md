@@ -1,5 +1,10 @@
 # ADI-2 Control for Linux
 
+**Native macOS app:** [ADI-2 Companion](macOS/README.md) adds a SwiftUI/CoreMIDI
+interface, portable EQ profiles and sandboxed packaging. It is currently a
+development build; physical hardware and App Store release qualification are
+tracked in the [submission guide](macOS/APP_STORE.md).
+
 <img src="data/tech.norvi.Adi2Control.png" width="96" align="right" alt="ADI-2 Control icon" />
 
 A native GTK4 remote, EQ builder, and bit-perfect PipeWire setup for the
