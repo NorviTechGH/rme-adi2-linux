@@ -26,8 +26,9 @@ This is independent software, not affiliated with or endorsed by RME.
 - Recall and save the ADI-2's 20 EQ memory slots and its 9 device setups, with
   confirmation before every hardware memory recall or save. These operations
   follow the protocol and still require Mac hardware testing.
-- A clearly marked demo mode that sends no MIDI, including the DT 1990
-  reference profile carried over from the Linux version.
+- A clearly marked demo mode that sends no MIDI, with an original **Example EQ**
+  for exploring the editor. It is illustrative, not a headphone-specific
+  correction or listening recommendation.
 
 The macOS app does not apply the Linux PipeWire configuration, manage macOS
 audio routing, or change the system sample rate. No audio is captured or
@@ -233,6 +234,8 @@ including macOS version, Mac architecture, ADI-2 model/firmware, and steps.
 Do not include personal files or sensitive diagnostic data.
 
 Code is MIT licensed; the bundled license preserves the copyright notice.
-RME's published MIDITable is the protocol reference. The DT 1990 Pro analytic-pad
-reference derives from the Linux app's oratory1990/AutoEq profile. All product
-names identify compatible hardware and remain their owners' property.
+RME's published MIDITable is the protocol reference. The Mac app's bundled
+**Example EQ** uses original, gentle settings to demonstrate the editor rather
+than a third-party headphone correction. Imported and saved profiles retain the
+shared JSON format. All product names identify compatible hardware and remain
+their owners' property.

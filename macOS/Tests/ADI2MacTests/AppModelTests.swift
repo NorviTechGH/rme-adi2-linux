@@ -127,7 +127,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         try ready(fake,model)
-        model.loadReference();let draft=model.profile
+        model.loadExample();let draft=model.profile
         fake.failNextSend=true
         model.applyProfile()
         XCTAssertFalse(model.canWrite);XCTAssertFalse(model.connected)
@@ -140,11 +140,11 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         let volume=try XCTUnwrap(model.parameters.first {$0.index == 12})
-        model.loadReference();model.setParameter(volume,value:-30);model.applyProfile();model.sync()
+        model.loadExample();model.setParameter(volume,value:-30);model.applyProfile();model.sync()
         XCTAssertEqual(fake.attempts.count,0)
         model.startDemo()
         model.setParameter(volume,value:-40)
-        model.loadReference();model.applyProfile();model.sync()
+        model.loadExample();model.applyProfile();model.sync()
         let gain=try XCTUnwrap(ParameterRegistry.eq.first {$0.index == 4})
         model.setEQParameter(gain,value:2)
         XCTAssertTrue(model.demoMode);XCTAssertFalse(model.canWrite)
@@ -179,7 +179,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         try ready(fake,model)
-        model.loadReference();let draft=model.profile
+        model.loadExample();let draft=model.profile
         fake.deliver([try ADI2Protocol.encode(address:8,index:6,raw:0)])
         XCTAssertFalse(model.canWrite);XCTAssertFalse(model.connected)
         XCTAssertTrue(model.hasDraft);XCTAssertEqual(model.profile,draft)
@@ -190,7 +190,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
         try ready(fake,model)
-        model.loadReference();model.selectedPresetSlot=2;model.presetName="Studio"
+        model.loadExample();model.selectedPresetSlot=2;model.presetName="Studio"
         let messages=try model.profile.presetMessages(device:0x71,slot:2,name:"Studio")
         model.saveDevicePreset()
         XCTAssertEqual(Array(fake.sent.suffix(3)),messages)
@@ -251,13 +251,13 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
     func testLocalProfileLoadStaysDraftUntilExplicitApply() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake,library:FileProfileLibrary(directory:fake.libraryDirectory))
         defer {model.disconnect()}
-        model.loadReference();model.profile.name="Local reference";model.saveLocalProfile()
+        model.loadExample();model.profile.name="Local reference";model.saveLocalProfile()
         XCTAssertEqual(model.localProfiles.count,1)
         model.selectOutput(.line)
         let saved=try XCTUnwrap(model.localProfiles.first)
         model.loadLocalProfile(saved)
         XCTAssertEqual(model.profile.output,.line)
-        XCTAssertEqual(model.profile.bands,EQProfile.dt1990.bands)
+        XCTAssertEqual(model.profile.bands,EQProfile.example.bands)
         XCTAssertTrue(model.hasDraft)
         XCTAssertEqual(fake.attempts.count,0)
     }

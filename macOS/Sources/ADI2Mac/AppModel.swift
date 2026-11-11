@@ -105,7 +105,7 @@ typealias ParameterKey = ParameterAddress
     }
     func startDemo() {
         disconnect(); demoMode = true
-        demoPresets = [1:.dt1990]; demoSetups = [:]
+        demoPresets = [1:.example]; demoSetups = [:]
         values = [:]; hasDraft = false; drafts = [:]
         for output in Output.allCases {
             for p in ParameterRegistry.output(for: deviceModel, output: output) {
@@ -117,7 +117,7 @@ typealias ParameterKey = ParameterAddress
         for address in [1,2,4,5,7,8,10,11] {
             for p in ParameterRegistry.eq { values[ParameterKey(address:address,index:p.index)] = Int((p.defaultValue / p.increment).rounded(.toNearestOrEven)) }
         }
-        profile = .dt1990; profile.output = selectedOutput; hasDraft = false
+        profile = .example; profile.output = selectedOutput; hasDraft = false
         if let parameters = try? ADI2Protocol.parseParameters(profile.containers().flatMap { $0 }) {
             for p in parameters { values[ParameterKey(address:p.address,index:p.index)] = p.raw }
         }
@@ -276,7 +276,7 @@ typealias ParameterKey = ParameterAddress
     func setBassTrebleEnabled(_ value: Bool) { profile.bassTrebleEnabled = value; hasDraft = true }
     func setLoudnessEnabled(_ value: Bool) { profile.loudnessEnabled = value; hasDraft = true }
     func loadFlat() { profile = .flat; profile.output = selectedOutput; importWarnings = []; hasDraft = true }
-    func loadReference() { profile = .dt1990; profile.output = selectedOutput; importWarnings = []; hasDraft = true }
+    func loadExample() { profile = .example; profile.output = selectedOutput; importWarnings = []; hasDraft = true }
     func applyProfile() {
         var attemptedWrite = false
         do {

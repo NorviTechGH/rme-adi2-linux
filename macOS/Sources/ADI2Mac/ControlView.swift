@@ -102,7 +102,7 @@ struct ControlView: View {
                 Section("Profiles") {
                     sidebarItem("Profiles and presets", icon: "square.stack.3d.up", section: "presets")
                     Button { model.section = "output"; model.loadFlat() } label: { Label("Flat response", systemImage: "line.diagonal") }
-                    Button { model.section = "output"; model.loadReference() } label: { Label("DT 1990 reference", systemImage: "headphones.circle") }
+                    Button { model.section = "output"; model.loadExample() } label: { Label("Example EQ", systemImage: "slider.horizontal.3") }
                 }
             }
             .listStyle(.sidebar)

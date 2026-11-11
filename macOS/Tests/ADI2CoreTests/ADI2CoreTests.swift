@@ -72,17 +72,17 @@ final class ADI2CoreTests: XCTestCase {
         XCTAssertThrowsError(try ADI2Protocol.parseParameters([0,0,0x80]))
     }
     func testProfileJSONMatchesLinuxKeysAndRoundTrips() throws {
-        let profile=EQProfile.dt1990
+        let profile=EQProfile.example
         let data=try JSONEncoder().encode(profile)
         let text=String(decoding:data,as:UTF8.self)
         XCTAssertTrue(text.contains("freq_hz")); XCTAssertTrue(text.contains("gain_db")); XCTAssertTrue(text.contains("eq_enable"))
         XCTAssertEqual(try JSONDecoder().decode(EQProfile.self,from:data),profile)
     }
     func testProfileWireBothChannelsAndSwitches() throws {
-        let values=try ADI2Protocol.parseParameters(EQProfile.dt1990.containers().flatMap {$0})
+        let values=try ADI2Protocol.parseParameters(EQProfile.example.containers().flatMap {$0})
         for address in [7,8] {
-            XCTAssertEqual(values.first {$0.address == address && $0.index == 4}?.raw,13)
-            XCTAssertEqual(values.first {$0.address == address && $0.index == 18}?.raw,10000)
+            XCTAssertEqual(values.first {$0.address == address && $0.index == 4}?.raw,2)
+            XCTAssertEqual(values.first {$0.address == address && $0.index == 18}?.raw,11000)
         }
         XCTAssertEqual(values.first {$0.address == 7 && $0.index == 2}?.raw,1)
         XCTAssertEqual(values.first {$0.address == 7 && $0.index == 20}?.raw,0)
@@ -97,17 +97,17 @@ final class ADI2CoreTests: XCTestCase {
         p.bands=[];XCTAssertThrowsError(try p.containers())
     }
     let apo="""
-    Preamp: -6.5 dB
-    Filter 1: ON LSC Fc 105 Hz Gain 6.5 dB Q 0.70
-    Filter 2: ON PK Fc 150 Hz Gain -2.0 dB Q 0.50
-    Filter 3: ON PK Fc 4200 Hz Gain 4.5 dB Q 3.50
-    Filter 4: ON PK Fc 7400 Hz Gain -3.0 dB Q 3.40
-    Filter 5: ON HSC Fc 10000 Hz Gain -7.5 dB Q 0.70
+    Preamp: -3.0 dB
+    Filter 1: ON LSC Fc 90 Hz Gain 1.0 dB Q 0.70
+    Filter 2: ON PK Fc 350 Hz Gain -0.5 dB Q 1.00
+    Filter 3: ON PK Fc 1800 Hz Gain 0.5 dB Q 1.10
+    Filter 4: ON PK Fc 5200 Hz Gain -1.0 dB Q 1.40
+    Filter 5: ON HSC Fc 11000 Hz Gain -0.5 dB Q 0.70
     """
-    func testAPOImportMatchesHardwareVerifiedProfileAndWarnsPreamp() throws {
-        let r=try EQImporter.parse(text:apo,name:"Reference",output:.line)
-        XCTAssertEqual(r.profile.bands,EQProfile.dt1990.bands)
-        XCTAssertEqual(r.profile.output,.line);XCTAssertEqual(r.preampDB,-6.5)
+    func testAPOImportMatchesIllustrativeExampleAndWarnsPreamp() throws {
+        let r=try EQImporter.parse(text:apo,name:"Example EQ",output:.line)
+        XCTAssertEqual(r.profile.bands,EQProfile.example.bands)
+        XCTAssertEqual(r.profile.output,.line);XCTAssertEqual(r.preampDB,-3.0)
         XCTAssertTrue(r.warnings.contains {$0.contains("Preamp")})
     }
     func testTenBandReductionKeepsStrongestAndReportsDropped() throws {
@@ -117,17 +117,17 @@ final class ADI2CoreTests: XCTestCase {
         XCTAssertTrue(r.warnings.contains {$0.contains("Dropped 5")})
     }
     func testCSVQuotedHeaderCRLFAndJSONAliases() throws {
-        let csv="\"frequency\",gain_db,q,type\r\n105,6.5,0.7,LS\r\n4200,4.5,3.5,PK\r\n10000,-7.5,0.7,HS\r\n"
+        let csv="\"frequency\",gain_db,q,type\r\n90,1.0,0.7,LS\r\n1800,0.5,1.1,PK\r\n11000,-0.5,0.7,HS\r\n"
         let r=try EQImporter.parse(text:csv)
-        XCTAssertEqual(r.profile.bands[0].type,"Shelf");XCTAssertEqual(r.profile.bands[4].frequency,10000)
-        let json=#"{"name":"Test","filters":[{"type":"LOW_SHELF","frequency":105,"gain":6.5,"q":0.7},{"type":"PEAKING","fc":4200,"gain_db":4.5,"q":3.5}]}"#
+        XCTAssertEqual(r.profile.bands[0].type,"Shelf");XCTAssertEqual(r.profile.bands[4].frequency,11000)
+        let json=#"{"name":"Test","filters":[{"type":"LOW_SHELF","frequency":90,"gain":1,"q":0.7},{"type":"PEAKING","fc":1800,"gain_db":0.5,"q":1.1}]}"#
         let j=try EQImporter.parse(text:json)
-        XCTAssertEqual(j.profile.name,"Test");XCTAssertEqual(j.profile.bands[1].gainDB,4.5)
+        XCTAssertEqual(j.profile.name,"Test");XCTAssertEqual(j.profile.bands[1].gainDB,0.5)
     }
     func testOwnProfileImportPreservesContentAndSelectsOutput() throws {
-        let text=String(decoding:try JSONEncoder().encode(EQProfile.dt1990),as:UTF8.self)
+        let text=String(decoding:try JSONEncoder().encode(EQProfile.example),as:UTF8.self)
         let r=try EQImporter.parse(text:text,output:.line)
-        XCTAssertEqual(r.profile.bands,EQProfile.dt1990.bands);XCTAssertEqual(r.profile.output,.line);XCTAssertEqual(r.warnings,[])
+        XCTAssertEqual(r.profile.bands,EQProfile.example.bands);XCTAssertEqual(r.profile.output,.line);XCTAssertEqual(r.warnings,[])
     }
     func testImportClampsAndReportsInvalidFilters() throws {
         let r=try EQImporter.parse(text:"Filter 1: ON LSC Fc 10 Hz Gain 15 dB Q 0.2\nFilter 2: ON LSC Fc 80 Hz Gain 3 dB Q 0.7\nFilter 3: ON PK Fc 24000 Hz Gain -14 dB Q 12")
@@ -186,14 +186,14 @@ extension ADI2CoreTests {
 extension ADI2CoreTests {
     func validState() throws -> [ParameterAddress:Int] {
         var state: [ParameterAddress:Int] = [:]
-        for p in try ADI2Protocol.parseParameters(EQProfile.dt1990.containers().flatMap {$0}) { state[ParameterAddress(address:p.address,index:p.index)] = p.raw }
+        for p in try ADI2Protocol.parseParameters(EQProfile.example.containers().flatMap {$0}) { state[ParameterAddress(address:p.address,index:p.index)] = p.raw }
         state[ParameterAddress(address:6,index:12)] = -100
         return state
     }
     func testValidatedHardwareProfileMatchesBothChannels() throws {
         let state=DeviceStateAccumulator(output:.phones,values:try validState())
-        XCTAssertEqual(try state.profile().bands,EQProfile.dt1990.bands)
-        XCTAssertEqual(try state.profile(right:true).bands,EQProfile.dt1990.bands)
+        XCTAssertEqual(try state.profile().bands,EQProfile.example.bands)
+        XCTAssertEqual(try state.profile(right:true).bands,EQProfile.example.bands)
         XCTAssertNoThrow(try state.validate(device:.dac))
     }
     func testIncompleteAndInvalidHardwareCannotHydrateReadyState() throws {
@@ -215,10 +215,10 @@ extension ADI2CoreTests {
 
 extension ADI2CoreTests {
     func testPresetSaveMatchesLinuxWireOracleAndSeparateCommit() throws {
-        let messages=try EQProfile.dt1990.presetMessages(device:0x71,slot:2,name:"Studio")
+        let messages=try EQProfile.example.presetMessages(device:0x71,slot:2,name:"Studio")
         // The explicit fixture below is generated by the Linux app's encoding,
         // including exactly 17 band containers per preset channel.
-        let actualOracle=hex("F0 00 20 0D 71 02 68 60 01 69 00 0D 69 20 69 69 40 07 69 7F 7C 6A 01 16 6A 20 05 6A 40 09 6A 73 24 6B 00 23 6B 3F 7A 6B 55 64 6B 60 22 6C 00 01 6C 3F 71 6C 57 68 6C 60 07 70 60 01 71 00 0D 71 20 69 71 40 07 71 7F 7C 72 01 16 72 20 05 72 40 09 72 73 24 73 00 23 73 3F 7A 73 55 64 73 60 22 74 00 01 74 3F 71 74 57 68 74 60 07 F7")
+        let actualOracle=hex("F0 00 20 0D 71 02 68 60 01 69 00 02 69 20 5A 69 40 07 69 7F 7F 6A 02 5E 6A 20 0A 6A 40 01 6A 6E 08 6B 00 0B 6B 3F 7E 6B 54 08 6B 60 0E 6C 00 01 6C 3F 7F 6C 58 4C 6C 60 07 70 60 01 71 00 02 71 20 5A 71 40 07 71 7F 7F 72 02 5E 72 20 0A 72 40 01 72 6E 08 73 00 0B 73 3F 7E 73 54 08 73 60 0E 74 00 01 74 3F 7F 74 58 4C 74 60 07 F7")
         XCTAssertEqual(messages.count,3)
         XCTAssertEqual(messages[0],actualOracle)
         XCTAssertEqual(messages[0].count,109)
@@ -247,7 +247,7 @@ extension ADI2CoreTests {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString,isDirectory:true)
         defer {try? FileManager.default.removeItem(at:root)}
         let library=FileProfileLibrary(directory:root)
-        var profile=EQProfile.dt1990;profile.name="../../A profile / with a path"
+        var profile=EQProfile.example;profile.name="../../A profile / with a path"
         let first=try library.save(profile),second=try library.save(profile)
         XCTAssertFalse(first.id == second.id)
         XCTAssertTrue(UUID(uuidString:first.id) != nil)
@@ -368,7 +368,7 @@ extension ADI2CoreTests {
  try tests.testProfileJSONMatchesLinuxKeysAndRoundTrips()
  try tests.testProfileWireBothChannelsAndSwitches()
  tests.testProfileRejectsUnsupportedBandsAndNonFinite()
- try tests.testAPOImportMatchesHardwareVerifiedProfileAndWarnsPreamp()
+ try tests.testAPOImportMatchesIllustrativeExampleAndWarnsPreamp()
  try tests.testTenBandReductionKeepsStrongestAndReportsDropped()
  try tests.testCSVQuotedHeaderCRLFAndJSONAliases()
  try tests.testOwnProfileImportPreservesContentAndSelectsOutput()

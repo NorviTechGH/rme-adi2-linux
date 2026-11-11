@@ -1,3 +1,26 @@
+## 2026-11-11 — Use an original Mac example profile for release
+
+- Replaced the Mac app's bundled DT 1990 reference with an original, gentle
+  **Example EQ** for illustrating the editor. The previous five-band adaptation's
+  exact upstream source/revision and commercial-use provenance were unresolved;
+  this change makes no claim about infringement. The example is not marketed as
+  a headphone-specific correction or listening recommendation.
+- Demo state and its simulated first preset now use the example. Selecting it
+  creates a draft for the chosen output; it never applies EQ automatically.
+  Flat EQ, imports, the shared JSON schema, saved profiles and the Linux legacy
+  source/data are unchanged. No migration or replacement of user profiles occurs.
+- Updated Mac importer/library/preset test fixtures to the original example. The
+  preset byte oracle was generated independently with the unchanged Linux
+  encoder and the new illustrative numbers. Core/model CLT checks pass:
+  33 core cases / 205 assertions and 17 fake-MIDI app cases / 118 assertions.
+- Release Help now targets the prepared support page, and the privacy alert's
+  paragraphs use real newlines. The accepted main-fader renderer is unchanged.
+  The running app, connected DAC and pending personal EQ draft were not changed,
+  restarted or applied by these source/test edits.
+- Next: run native CI on this release source, prepare fresh capture assets from
+  its resulting build, and publish the support/privacy pages through the source
+  PR before using their URLs in App Store Connect.
+
 ## 2026-11-11 — Prepare the paid Mac App Store release
 
 - Created the intended app record and explicit bundle identifier after the user

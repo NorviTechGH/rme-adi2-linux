@@ -23,7 +23,7 @@ import AppKit
                 Button(model.demoMode ? "Leave Demo" : "Explore Demo") { if model.demoMode { model.stopDemo() } else { model.startDemo() } }
             }
             CommandGroup(replacing:.help) {
-                Link("Setup and Support", destination:URL(string:"https://github.com/spencernorton/rme-adi2-linux/blob/main/macOS/README.md")!)
+                Link("Setup and Support", destination:URL(string:"https://github.com/spencernorton/rme-adi2-linux/blob/main/macOS/SUPPORT.md")!)
                 Button("Privacy Policy") { showPrivacy() }
             }
         }

@@ -22,7 +22,17 @@ public struct EQProfile: Codable, Equatable, Sendable {
     public init(name: String = "Untitled", output: Output = .phones, bands: [Band] = Array(repeating: Band(), count: 5), eqEnabled: Bool = true, bassTrebleEnabled: Bool = false, loudnessEnabled: Bool = false) { self.name = name; self.output = output; self.bands = bands; self.eqEnabled = eqEnabled; self.bassTrebleEnabled = bassTrebleEnabled; self.loudnessEnabled = loudnessEnabled }
     enum CodingKeys: String, CodingKey { case name, output, bands, eqEnabled = "eq_enable", bassTrebleEnabled = "bass_treble_enable", loudnessEnabled = "loudness_enable" }
     public static var flat: EQProfile { EQProfile(name: "Flat", bands: [100.0,500,1000,4000,10000].map { Band(frequency: $0) }) }
-    public static var dt1990: EQProfile { EQProfile(name: "DT 1990 Pro (analytic) — studio reference", bands: [Band(type:"Shelf",gainDB:6.5,frequency:105,q:0.7),Band(gainDB:-2,frequency:150,q:0.5),Band(gainDB:4.5,frequency:4200,q:3.5),Band(gainDB:-3,frequency:7400,q:3.4),Band(type:"Shelf",gainDB:-7.5,frequency:10000,q:0.7)]) }
+    /// Original illustrative settings for exploring the editor, not a
+    /// headphone-specific correction or listening recommendation.
+    public static var example: EQProfile {
+        EQProfile(name: "Example EQ", bands: [
+            Band(type:"Shelf",gainDB:1,frequency:90,q:0.7),
+            Band(gainDB:-0.5,frequency:350,q:1),
+            Band(gainDB:0.5,frequency:1800,q:1.1),
+            Band(gainDB:-1,frequency:5200,q:1.4),
+            Band(type:"Shelf",gainDB:-0.5,frequency:11000,q:0.7)
+        ])
+    }
     public func validate() throws { guard bands.count == 5 else { throw ADI2Error.invalid("An ADI-2 profile requires exactly five bands.") }; for (i,b) in bands.enumerated() { try b.validate(index:i) } }
     public static let layout: [(type: Int?, gain: Int, frequency: Int, q: Int)] = [(3,4,5,6),(nil,7,8,9),(nil,10,11,12),(nil,13,14,15),(16,17,18,19)]
     public func containers() throws -> [[UInt8]] {
