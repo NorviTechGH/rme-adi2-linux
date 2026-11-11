@@ -1,3 +1,16 @@
+## 2026-11-11 — Resolve native CI compiler compatibility
+
+- The first full-Xcode runner found ambiguous channel-index type inference and
+  an EQ Canvas expression exceeding its type-checking budget before tests ran.
+- Made the index collection explicitly typed and split graph drawing/dragging
+  into small typed helpers. Geometry, drawing order, draft behavior and MIDI
+  dispatch are unchanged; no hardware action or app restart was performed.
+- Validation: 50 core/model cases / 323 assertions and universal development
+  compilation pass locally. The next CI run must validate the older Xcode
+  compiler and actual Xcode archive; this is not an App Store validation claim.
+- Next: finish native CI and physical memory qualification, keeping the release
+  PR as work in progress until the remaining release evidence is complete.
+
 ## 2026-11-11 — Use an original Mac example profile for release
 
 - Replaced the Mac app's bundled DT 1990 reference with an original, gentle

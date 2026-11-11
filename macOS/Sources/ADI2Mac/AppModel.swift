@@ -166,10 +166,15 @@ typealias ParameterKey = ParameterAddress
         } catch { errorMessage = error.localizedDescription; disconnect() }
     }
     private func updateChannelNotice() {
-        let indices = EQProfile.layout.flatMap { [$0.gain,$0.frequency,$0.q] + ($0.type.map { [$0] } ?? []) }
-        channelNotice = indices.contains { index in
+        var indices: [Int] = []
+        for layout in EQProfile.layout {
+            indices.append(contentsOf: [layout.gain, layout.frequency, layout.q])
+            if let typeIndex = layout.type { indices.append(typeIndex) }
+        }
+        let differs = indices.contains(where: { index in
             values[ParameterKey(address:selectedOutput.left,index:index)] != values[ParameterKey(address:selectedOutput.right,index:index)]
-        } ? "Left and right EQ differ. The editor shows the left channel; Apply EQ replaces both channels." : nil
+        })
+        channelNotice = differs ? "Left and right EQ differ. The editor shows the left channel; Apply EQ replaces both channels." : nil
     }
     private func readProfile() {
         do { profile = try DeviceStateAccumulator(output:selectedOutput, values:values).profile() }

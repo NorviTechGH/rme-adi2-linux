@@ -568,70 +568,7 @@ private struct EQPlot: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let rect = CGRect(x: leftInset, y: topInset, width: max(1, geometry.size.width - leftInset - rightInset), height: max(1, geometry.size.height - topInset - bottomInset))
-            Canvas { context, _ in
-                let gridColor = Color.primary.opacity(colorScheme == .dark ? 0.13 : 0.1)
-                for hz in ticks {
-                    let x = xPosition(hz, rect: rect)
-                    var path = Path()
-                    path.move(to: CGPoint(x: x, y: rect.minY))
-                    path.addLine(to: CGPoint(x: x, y: rect.maxY))
-                    context.stroke(path, with: .color(gridColor), lineWidth: 0.5)
-                    let text = Text(hz >= 1000 ? "\(Int(hz / 1000))k" : "\(Int(hz))").font(.system(size: 10)).foregroundColor(.secondary)
-                    context.draw(text, at: CGPoint(x: x, y: rect.maxY + 15))
-                }
-                for db in stride(from: -12, through: 12, by: 6) {
-                    let y = yPosition(Double(db), rect: rect)
-                    var path = Path()
-                    path.move(to: CGPoint(x: rect.minX, y: y))
-                    path.addLine(to: CGPoint(x: rect.maxX, y: y))
-                    context.stroke(path, with: .color(Color.primary.opacity(db == 0 ? 0.3 : 0.1)), style: StrokeStyle(lineWidth: db == 0 ? 1 : 0.5))
-                    context.draw(Text(db > 0 ? "+\(db)" : "\(db)").font(.system(size: 10)).foregroundColor(.secondary), at: CGPoint(x: rect.minX - 18, y: y))
-                }
-                context.clip(to: Path(rect))
-                var response = Path()
-                for point in 0...400 {
-                    let proportion = Double(point) / 400
-                    let frequency = 20 * pow(1000, proportion)
-                    let db = profile.eqEnabled ? EQResponse.decibels(profile: profile, frequency: frequency) : 0
-                    let position = CGPoint(x: rect.minX + rect.width * proportion, y: yPosition(min(18, max(-18, db)), rect: rect))
-                    if point == 0 { response.move(to: position) } else { response.addLine(to: position) }
-                }
-                context.stroke(response, with: .color(InstrumentStyle.blue), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                if profile.eqEnabled {
-                    for (index, band) in profile.bands.enumerated() {
-                        let position = CGPoint(x: xPosition(band.frequency, rect: rect), y: yPosition(band.gainDB, rect: rect))
-                        let circle = Path(ellipseIn: CGRect(x: position.x - 10, y: position.y - 10, width: 20, height: 20))
-                        context.fill(circle, with: .color(InstrumentStyle.bandColors[index]))
-                        context.stroke(circle, with: .color(Color(nsColor: .windowBackgroundColor)), lineWidth: 2)
-                        context.draw(Text("\(index + 1)").font(.system(size: 10, weight: .bold)).foregroundColor(.white), at: position)
-                    }
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 2)
-                .onChanged { drag in
-                    guard profile.eqEnabled else { return }
-                    if draggedBand == nil {
-                        let closest = profile.bands.enumerated().min { a, b in
-                            distance(drag.startLocation, band: a.element, rect: rect) < distance(drag.startLocation, band: b.element, rect: rect)
-                        }
-                        if let closest, distance(drag.startLocation, band: closest.element, rect: rect) < 28 {
-                            draggedBand = closest.offset
-                        }
-                    }
-                    guard let index = draggedBand, profile.bands.indices.contains(index) else { return }
-                    var band = profile.bands[index]
-                    let proportion = min(1, max(0, (drag.location.x - rect.minX) / rect.width))
-                    let frequency = max(index >= 3 ? 200 : 20, 20 * pow(1000, proportion))
-                    band.frequency = frequency > 2047 ? (frequency / 10).rounded() * 10 : frequency.rounded()
-                    if band.type != "High Pass" && band.type != "High Cut" {
-                        let normalizedGain = Double((drag.location.y - rect.minY) / rect.height)
-                        band.gainDB = (min(12.0, max(-12.0, 12.0 - 24.0 * normalizedGain)) * 2.0).rounded() / 2.0
-                    }
-                    onChange(index, band)
-                }
-                .onEnded { _ in draggedBand = nil })
+            plotCanvas(in: plotRect(for: geometry.size))
         }
         .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
@@ -641,15 +578,111 @@ private struct EQPlot: View {
         .help("Drag a numbered point to change frequency and gain. Use the controls below for precise values.")
     }
 
+    private func plotRect(for size: CGSize) -> CGRect {
+        CGRect(x: leftInset, y: topInset,
+               width: max(1, size.width - leftInset - rightInset),
+               height: max(1, size.height - topInset - bottomInset))
+    }
+
+    private func plotCanvas(in rect: CGRect) -> some View {
+        Canvas { context, _ in
+            drawGrid(in: &context, rect: rect)
+            context.clip(to: Path(rect))
+            drawResponse(in: &context, rect: rect)
+            if profile.eqEnabled { drawBandMarkers(in: &context, rect: rect) }
+        }
+        .contentShape(Rectangle())
+        .gesture(plotDrag(in: rect))
+    }
+
+    private func drawGrid(in context: inout GraphicsContext, rect: CGRect) {
+        let gridColor = Color.primary.opacity(colorScheme == .dark ? 0.13 : 0.1)
+        for hz in ticks {
+            let x = xPosition(hz, rect: rect)
+            var path = Path()
+            path.move(to: CGPoint(x: x, y: rect.minY))
+            path.addLine(to: CGPoint(x: x, y: rect.maxY))
+            context.stroke(path, with: .color(gridColor), lineWidth: 0.5)
+            let label = hz >= 1000 ? "\(Int(hz / 1000))k" : "\(Int(hz))"
+            let text = Text(label).font(.system(size: 10)).foregroundColor(.secondary)
+            context.draw(text, at: CGPoint(x: x, y: rect.maxY + 15))
+        }
+        for db in stride(from: -12, through: 12, by: 6) {
+            let y = yPosition(Double(db), rect: rect)
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: y))
+            path.addLine(to: CGPoint(x: rect.maxX, y: y))
+            let color = Color.primary.opacity(db == 0 ? 0.3 : 0.1)
+            let style = StrokeStyle(lineWidth: db == 0 ? 1 : 0.5)
+            context.stroke(path, with: .color(color), style: style)
+            let label = db > 0 ? "+\(db)" : "\(db)"
+            let text = Text(label).font(.system(size: 10)).foregroundColor(.secondary)
+            context.draw(text, at: CGPoint(x: rect.minX - 18, y: y))
+        }
+    }
+
+    private func drawResponse(in context: inout GraphicsContext, rect: CGRect) {
+        var response = Path()
+        for point in 0...400 {
+            let proportion = Double(point) / 400.0
+            let frequency = 20.0 * pow(1000.0, proportion)
+            let db = profile.eqEnabled ? EQResponse.decibels(profile: profile, frequency: frequency) : 0
+            let position = CGPoint(x: rect.minX + rect.width * CGFloat(proportion),
+                                   y: yPosition(min(18.0, max(-18.0, db)), rect: rect))
+            if point == 0 { response.move(to: position) } else { response.addLine(to: position) }
+        }
+        let style = StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+        context.stroke(response, with: .color(InstrumentStyle.blue), style: style)
+    }
+
+    private func drawBandMarkers(in context: inout GraphicsContext, rect: CGRect) {
+        for (index, band) in profile.bands.enumerated() {
+            let position = CGPoint(x: xPosition(band.frequency, rect: rect), y: yPosition(band.gainDB, rect: rect))
+            let circle = Path(ellipseIn: CGRect(x: position.x - 10, y: position.y - 10, width: 20, height: 20))
+            context.fill(circle, with: .color(InstrumentStyle.bandColors[index]))
+            context.stroke(circle, with: .color(Color(nsColor: .windowBackgroundColor)), lineWidth: 2)
+            let text = Text("\(index + 1)").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+            context.draw(text, at: position)
+        }
+    }
+
+    private func plotDrag(in rect: CGRect) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { updateBand(for: $0, rect: rect) }
+            .onEnded { _ in draggedBand = nil }
+    }
+
+    private func updateBand(for drag: DragGesture.Value, rect: CGRect) {
+        guard profile.eqEnabled else { return }
+        if draggedBand == nil {
+            let closest = profile.bands.enumerated().min { a, b in
+                distance(drag.startLocation, band: a.element, rect: rect) < distance(drag.startLocation, band: b.element, rect: rect)
+            }
+            if let closest, distance(drag.startLocation, band: closest.element, rect: rect) < 28 {
+                draggedBand = closest.offset
+            }
+        }
+        guard let index = draggedBand, profile.bands.indices.contains(index) else { return }
+        var band = profile.bands[index]
+        let proportion = Double(min(1, max(0, (drag.location.x - rect.minX) / rect.width)))
+        let frequency = max(index >= 3 ? 200.0 : 20.0, 20.0 * pow(1000.0, proportion))
+        band.frequency = frequency > 2047 ? (frequency / 10.0).rounded() * 10.0 : frequency.rounded()
+        if band.type != "High Pass" && band.type != "High Cut" {
+            let normalizedGain = Double((drag.location.y - rect.minY) / rect.height)
+            band.gainDB = (min(12.0, max(-12.0, 12.0 - 24.0 * normalizedGain)) * 2.0).rounded() / 2.0
+        }
+        onChange(index, band)
+    }
+
     private func xPosition(_ frequency: Double, rect: CGRect) -> CGFloat {
-        rect.minX + rect.width * log10(min(20000, max(20, frequency)) / 20) / 3
+        rect.minX + rect.width * CGFloat(log10(min(20000.0, max(20.0, frequency)) / 20.0) / 3.0)
     }
 
     private func yPosition(_ db: Double, rect: CGRect) -> CGFloat {
-        rect.minY + rect.height * (12 - db) / 24
+        rect.minY + rect.height * CGFloat((12.0 - db) / 24.0)
     }
 
     private func distance(_ point: CGPoint, band: Band, rect: CGRect) -> Double {
-        hypot(point.x - xPosition(band.frequency, rect: rect), point.y - yPosition(band.gainDB, rect: rect))
+        Double(hypot(point.x - xPosition(band.frequency, rect: rect), point.y - yPosition(band.gainDB, rect: rect)))
     }
 }
