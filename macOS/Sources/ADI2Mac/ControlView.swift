@@ -228,21 +228,16 @@ struct ControlView: View {
     private var outputControls: some View {
         HStack(spacing: 24) {
             if let volume = model.parameters.first(where: { $0.name == "Volume" }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Label("Output volume", systemImage: "speaker.wave.2")
-                            .font(.callout.weight(.medium))
-                        Spacer()
-                        Text(model.realValue(volume), format: .number.precision(.fractionLength(1)))
-                            .monospacedDigit()
-                            .font(.title3.weight(.medium))
-                        Text("dB").foregroundStyle(.secondary)
-                    }
-                    Slider(value: Binding(get: { model.realValue(volume) }, set: { model.setParameter(volume, value: $0) }), in: volume.minimum...volume.maximum, step: volume.increment)
-                        .accessibilityLabel("Output volume in decibels")
-                        .disabled(!model.canWrite && !model.demoMode)
-                }
+                SmoothVolumeControl(
+                    value: model.realValue(volume),
+                    bounds: volume.minimum...volume.maximum,
+                    step: volume.increment,
+                    enabled: model.canWrite || model.demoMode,
+                    onChange: { model.setParameter(volume, value: $0) }
+                )
                 .frame(maxWidth: 420)
+                // A different output or connection starts at its actual value.
+                .id("\(model.selectedOutput.rawValue):\(model.deviceModel.rawValue):\(model.selectedEndpointID ?? 0):\(model.connected):\(model.demoMode)")
             }
             if let mute = model.parameters.first(where: { $0.name == "Mute" }) {
                 Toggle(isOn: Binding(get: { model.realValue(mute) != 0 }, set: { model.setParameter(mute, value: $0 ? 1 : 0) })) {
@@ -465,6 +460,82 @@ struct ControlView: View {
         }
         .padding(30)
         .frame(width: 530)
+    }
+}
+
+/// Motion follows reported volume; only the native Slider can write a value.
+private struct SmoothVolumeControl: View {
+    let value: Double
+    let bounds: ClosedRange<Double>
+    let step: Double
+    let enabled: Bool
+    var onChange: (Double) -> Void
+    @ViewState<Bool> private var isEditing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var followAnimation: Animation? {
+        reduceMotion || isEditing || !enabled ? nil : .easeOut(duration: 0.12)
+    }
+    private var levelFraction: Double {
+        min(1, max(0, (value - bounds.lowerBound) / (bounds.upperBound - bounds.lowerBound)))
+    }
+    private var controlValue: Binding<Double> {
+        Binding(get: { value }, set: onChange)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Output volume", systemImage: "speaker.wave.2")
+                    .font(.callout.weight(.medium))
+                Spacer()
+                VStack(alignment: .trailing, spacing: 3) {
+                    HStack(spacing: 5) {
+                        Text(value, format: .number.precision(.fractionLength(1)))
+                            .monospacedDigit()
+                            .font(.title3.weight(.medium))
+                            .contentTransition(reduceMotion || isEditing ? .identity : .numericText(value: value))
+                            .animation(followAnimation, value: value)
+                        Text("dB").foregroundStyle(.secondary)
+                    }
+                    // A quiet level indicator guarantees visible easing on macOS
+                    // without feeding interpolated values into the control binding.
+                    Capsule()
+                        .fill(Color.primary.opacity(0.12))
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(InstrumentStyle.blue.opacity(enabled ? 1 : 0.4))
+                                .frame(width: 72 * levelFraction)
+                                .animation(followAnimation, value: value)
+                        }
+                        .frame(width: 72, height: 3)
+                        .accessibilityHidden(true)
+                }
+            }
+            nativeSlider
+                .accessibilityLabel("Output volume in decibels")
+                .disabled(!enabled)
+                .animation(followAnimation, value: value)
+        }
+    }
+
+    @ViewBuilder
+    private var nativeSlider: some View {
+        // The SDK 26 initializer separates tick artwork from keyboard stepping.
+        // Older SDKs keep the original stepped control and its native semantics.
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            Slider(value: controlValue, in: bounds, step: step, label: { EmptyView() }, tick: { _ in nil }, onEditingChanged: { isEditing = $0 })
+        } else {
+            legacySlider
+        }
+        #else
+        legacySlider
+        #endif
+    }
+
+    private var legacySlider: some View {
+        Slider(value: controlValue, in: bounds, step: step, onEditingChanged: { isEditing = $0 })
     }
 }
 

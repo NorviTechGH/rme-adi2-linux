@@ -1,3 +1,16 @@
+## 2026-11-11 — Smooth volume feedback
+
+- Added brief eased volume readout/level transitions, keeping direct dragging,
+  native 0.1 dB stepping and Reduce Motion behavior. Animation is confined to
+  presentation; the hardware binding and MIDI model are unchanged.
+- Validation: universal release build and sandbox/signature checks pass; native
+  demo accessibility adjustments remain exactly 0.1 dB. Independent code review
+  confirms no animation path can send interpolated MIDI. No new tests needed for
+  this presentation change; protocol and model source are unchanged.
+- Reopened the updated app, read the live DAC volume, and restored the user's
+  pending EQ draft from an export without applying it or changing hardware state.
+- Source publication and remaining App Store release gates are unchanged.
+
 ## 2026-11-11 — Correct shared EQ controls and verify physical DAC communication
 
 - A real DAC returned 219 parameters; the first Mac connection timed out because

@@ -9,6 +9,7 @@ This is independent software, not affiliated with or endorsed by RME.
 
 ## Current scope
 
+- Smooth volume feedback with native 0.1 dB steps and Reduce Motion support.
 - Five-band EQ with a combined response curve, numeric controls,
   and per-output draft editing.
 - Explicit connection and state synchronization through USB MIDI. Hardware
