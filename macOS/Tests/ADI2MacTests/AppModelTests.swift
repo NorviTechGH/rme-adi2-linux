@@ -48,7 +48,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         model.connect();fake.deliver(try fixture(output:output))
         XCTAssertTrue(model.canWrite)
     }
-    func testInitialConnectionRequiresWholeFreshStateBeforeWrites() throws {
+    func testInitialConnectionRequiresWholeFreshStateBeforeWrites() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         model.connect()
@@ -74,7 +74,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         fake.deliver(Array(containers.dropFirst(20)))
         XCTAssertTrue(model.canWrite)
     }
-    func testWrongDeviceRepliesCannotCompleteConnection() throws {
+    func testWrongDeviceRepliesCannotCompleteConnection() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         model.connect();fake.deliver(try fixture(),device:0x72)
@@ -82,7 +82,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         fake.deliver(try fixture())
         XCTAssertTrue(model.canWrite)
     }
-    func testChangingOutputDuringInitialSyncStartsIndependentState() throws {
+    func testChangingOutputDuringInitialSyncStartsIndependentState() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         model.connect()
@@ -96,7 +96,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(model.canWrite)
         XCTAssertEqual(model.profile.output,.line)
     }
-    func testConnectedOutputSwitchWaitsForPreviouslyUnseenOutput() throws {
+    func testConnectedOutputSwitchWaitsForPreviouslyUnseenOutput() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         try ready(fake,model)
@@ -108,7 +108,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(model.canWrite)
         XCTAssertEqual(model.profile.output,.line)
     }
-    func testOfflineImportedDraftSurvivesConnectingAndSyncing() throws {
+    func testOfflineImportedDraftSurvivesConnectingAndSyncing() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         let imported=try EQImporter.parse(text:"Filter 1: ON PK Fc 100 Hz Gain 3 dB Q 1",output:.phones)
@@ -121,7 +121,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(model.hasDraft)
         XCTAssertEqual(fake.sent.count,1,"Connecting and reading must not apply an offline draft.")
     }
-    func testFailedProfileWriteDisconnectsAndPreservesDraft() throws {
+    func testFailedProfileWriteDisconnectsAndPreservesDraft() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         try ready(fake,model)
@@ -134,7 +134,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(fake.connectedDevice == nil)
         XCTAssertEqual(fake.attempts.count,2)
     }
-    func testDisconnectedAndDemoControlsSendNoMIDI() throws {
+    func testDisconnectedAndDemoControlsSendNoMIDI() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         let volume=try XCTUnwrap(model.parameters.first {$0.index == 12})
@@ -150,7 +150,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         model.stopDemo();model.applyProfile()
         XCTAssertEqual(fake.attempts.count,0)
     }
-    func testSampleRateDisplayCannotSendWrite() throws {
+    func testSampleRateDisplayCannotSendWrite() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         model.connect()
@@ -163,7 +163,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertEqual(fake.sent.count,count)
         XCTAssertEqual(model.values[ParameterAddress(address:12,index:16)],1)
     }
-    func testCompleteButInvalidStateDisconnectsBeforeAllowingWrites() throws {
+    func testCompleteButInvalidStateDisconnectsBeforeAllowingWrites() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         model.connect()
@@ -173,7 +173,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertTrue(fake.connectedDevice == nil)
         XCTAssertEqual(fake.sent.count,1)
     }
-    func testInvalidLiveStateWhileEditingRevokesWrites() throws {
+    func testInvalidLiveStateWhileEditingRevokesWrites() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         defer {model.disconnect()}
         try ready(fake,model)
@@ -184,7 +184,7 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
         XCTAssertNotNil(model.errorMessage)
         XCTAssertTrue(fake.connectedDevice == nil)
     }
-    func testDeviceRemovalRevokesWriteReadiness() throws {
+    func testDeviceRemovalRevokesWriteReadiness() async throws {
         let fake=FakeMIDIConnection(),model=AppModel(midi:fake)
         try ready(fake,model)
         fake.available=[];fake.onDevicesChanged?()
@@ -197,19 +197,19 @@ func XCTUnwrap<T>(_ value:T?,file:StaticString=#filePath,line:UInt=#line) throws
 
 #if !canImport(XCTest)
 @main struct AppModelTestRunner {
-    @MainActor static func main() throws {
+    @MainActor static func main() async throws {
         let tests=AppModelTests()
-        try tests.testInitialConnectionRequiresWholeFreshStateBeforeWrites()
-        try tests.testWrongDeviceRepliesCannotCompleteConnection()
-        try tests.testChangingOutputDuringInitialSyncStartsIndependentState()
-        try tests.testConnectedOutputSwitchWaitsForPreviouslyUnseenOutput()
-        try tests.testOfflineImportedDraftSurvivesConnectingAndSyncing()
-        try tests.testFailedProfileWriteDisconnectsAndPreservesDraft()
-        try tests.testDisconnectedAndDemoControlsSendNoMIDI()
-        try tests.testSampleRateDisplayCannotSendWrite()
-        try tests.testCompleteButInvalidStateDisconnectsBeforeAllowingWrites()
-        try tests.testInvalidLiveStateWhileEditingRevokesWrites()
-        try tests.testDeviceRemovalRevokesWriteReadiness()
+        try await tests.testInitialConnectionRequiresWholeFreshStateBeforeWrites()
+        try await tests.testWrongDeviceRepliesCannotCompleteConnection()
+        try await tests.testChangingOutputDuringInitialSyncStartsIndependentState()
+        try await tests.testConnectedOutputSwitchWaitsForPreviouslyUnseenOutput()
+        try await tests.testOfflineImportedDraftSurvivesConnectingAndSyncing()
+        try await tests.testFailedProfileWriteDisconnectsAndPreservesDraft()
+        try await tests.testDisconnectedAndDemoControlsSendNoMIDI()
+        try await tests.testSampleRateDisplayCannotSendWrite()
+        try await tests.testCompleteButInvalidStateDisconnectsBeforeAllowingWrites()
+        try await tests.testInvalidLiveStateWhileEditingRevokesWrites()
+        try await tests.testDeviceRemovalRevokesWriteReadiness()
         print("AppModel: 11 cases, \(assertionCount) assertions, \(failureCount) failures")
         if failureCount > 0 {exit(1)}
     }
